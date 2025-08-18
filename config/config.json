@@ -3,6 +3,7 @@
     "categories": ["cs.CV"],
     "max_results": 200,
     "recent_days": 3,
+    "adaptive_recent_days": true,
     "citation_lookback_days": 60,
     "min_citations_for_highlight": 5
   },
