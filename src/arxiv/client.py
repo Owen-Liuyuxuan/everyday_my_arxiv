@@ -36,7 +36,7 @@ class ArxivClient:
             today = datetime.datetime.now(datetime.timezone.utc)
             # Monday is 0 in Python's weekday() function
             if today.weekday() == 0:  # If today is Monday
-                return 3
+                return 4
             else:
                 return 2
         else:
