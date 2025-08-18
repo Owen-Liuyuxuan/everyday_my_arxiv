@@ -91,7 +91,7 @@ jobs:
         # Create or update the index page
         if [ -f "wiki/Arxiv-Reports-Index.md" ]; then
           # Add the new report to the existing index
-          sed -i "1s/^/- [Report ${{ steps.generate_report.outputs.report_date }}](${REPORT_PAGE_NAME})\n/" wiki/Arxiv-Reports-Index.md
+          echo -e "- [Report ${{ steps.generate_report.outputs.report_date }}](${REPORT_PAGE_NAME})" >> wiki/Arxiv-Reports-Index.md
         else
           # Create a new index page
           cat > wiki/Arxiv-Reports-Index.md << EOF
