@@ -48,14 +48,65 @@ jobs:
         path: reports/
         retention-days: 30
     
-    - name: Create GitHub Release
-      if: github.event_name == 'schedule' # Only for automated runs, not manual triggers
-      uses: softprops/action-gh-release@v1
+    # - name: Create GitHub Release
+    #   if: github.event_name == 'schedule' # Only for automated runs, not manual triggers
+    #   uses: softprops/action-gh-release@v1
+    #   with:
+    #     name: "Arxiv CV Report ${{ steps.generate_report.outputs.report_date }}"
+    #     tag_name: "report-${{ steps.generate_report.outputs.report_date }}"
+    #     body_path: ${{ steps.generate_report.outputs.report_file }}
+    #     draft: false
+    #     prerelease: false
+    #   env:
+    #     GITHUB_TOKEN: ${{ secrets.PERSONAL_TOKEN }}
+      
+    - name: Checkout wiki
+      if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+      uses: actions/checkout@v4
       with:
-        name: "Arxiv CV Report ${{ steps.generate_report.outputs.report_date }}"
-        tag_name: "report-${{ steps.generate_report.outputs.report_date }}"
-        body_path: ${{ steps.generate_report.outputs.report_file }}
-        draft: false
-        prerelease: false
-      env:
-        GITHUB_TOKEN: ${{ secrets.PERSONAL_TOKEN }}
+        repository: ${{ github.repository }}.wiki
+        path: wiki
+        token: ${{ secrets.PERSONAL_TOKEN }}
+
+    - name: Update wiki page
+      if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+      run: |
+        # Create a page name for the report (no directories, use GitHub wiki naming convention)
+        REPORT_PAGE_NAME="Arxiv-Report-${{ steps.generate_report.outputs.report_date }}"
+        
+        # Copy the markdown report to the wiki with the proper filename
+        cp ${{ steps.generate_report.outputs.report_file }} "wiki/${REPORT_PAGE_NAME}.md"
+        
+        # Update the Home page with a link to the latest report
+        cat > wiki/Home.md << EOF
+        # Arxiv Reports
+        
+        ## Latest Report
+        * [Report ${{ steps.generate_report.outputs.report_date }}](${REPORT_PAGE_NAME})
+        
+        ## All Reports
+        See the [Reports Index](Arxiv-Reports-Index) for a list of all available reports.
+        EOF
+        
+        # Create or update the index page
+        if [ -f "wiki/Arxiv-Reports-Index.md" ]; then
+          # Add the new report to the existing index
+          echo -e "- [Report ${{ steps.generate_report.outputs.report_date }}](${REPORT_PAGE_NAME})" >> wiki/Arxiv-Reports-Index.md
+        else
+          # Create a new index page
+          cat > wiki/Arxiv-Reports-Index.md << EOF
+        # Arxiv Reports Index
+        
+        This page contains links to all Arxiv paper reports.
+        
+        - [Report ${{ steps.generate_report.outputs.report_date }}](${REPORT_PAGE_NAME})
+        EOF
+        fi
+        
+        # Commit and push changes to the wiki
+        cd wiki
+        git config user.name "GitHub Actions Bot"
+        git config user.email "actions@github.com"
+        git add .
+        git commit -m "Update Arxiv Report for ${{ steps.generate_report.outputs.report_date }}"
+        git push

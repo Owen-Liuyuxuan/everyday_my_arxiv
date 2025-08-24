@@ -18,8 +18,29 @@ class ArxivClient:
         
         self.categories = self.config['categories']
         self.max_results = self.config['max_results']
-        self.recent_days = self.config['recent_days']
+        # Get the base recent_days from config
+        self.base_recent_days = self.config['recent_days']
+        self.adaptive_recent_days = self.config["adaptive_recent_days"]
         self.citation_lookback_days = self.config['citation_lookback_days']
+    
+    @property
+    def recent_days(self) -> int:
+        """
+        Get the adaptive recent_days value based on the day of the week.
+        If today is Monday in UTC, use 3 days, otherwise use 2 days.
+        
+        Returns:
+            Number of days to look back for recent papers
+        """
+        if self.adaptive_recent_days:
+            today = datetime.datetime.now(datetime.timezone.utc)
+            # Monday is 0 in Python's weekday() function
+            if today.weekday() == 0:  # If today is Monday
+                return 3
+            else:
+                return 2
+        else:
+            return self.base_recent_days
     
     def get_recent_papers(self) -> List[Dict]:
         """
@@ -30,7 +51,10 @@ class ArxivClient:
         """
         # Calculate date range for recent papers
         today = datetime.datetime.now()
+        # Use the adaptive recent_days property
         date_filter = today - datetime.timedelta(days=self.recent_days)
+        
+        print(f"Using adaptive recent_days: {self.recent_days}")
         
         # Construct the query for Arxiv API
         query = " OR ".join([f"cat:{category}" for category in self.categories])
@@ -49,7 +73,7 @@ class ArxivClient:
             # Convert to datetime for comparison
             published_date = result.published.replace(tzinfo=None)
 
-            print(f"title: {result.title}, published_date: {published_date}")
+            # print(f"title: {result.title}, published_date: {published_date}")
             
             # Only include papers within the date range
             if published_date >= date_filter:

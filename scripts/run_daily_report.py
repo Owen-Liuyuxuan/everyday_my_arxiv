@@ -56,8 +56,8 @@ def main():
     recent_papers = arxiv_client.get_recent_papers()
     
     # 2. Filter papers by date
-    recent_papers = paper_filter.filter_by_date(recent_papers, days=config['arxiv']['recent_days'])
-    print(f"Found {len(recent_papers)} papers published in the last {config['arxiv']['recent_days']} days")
+    recent_papers = paper_filter.filter_by_date(recent_papers, days=arxiv_client.recent_days)
+    print(f"Found {len(recent_papers)} papers published in the last {arxiv_client.recent_days} days")
     
     # 3. Filter papers by category
     recent_papers = paper_filter.filter_by_category(recent_papers, categories=config['arxiv']['categories'])
