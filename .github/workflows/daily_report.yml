@@ -22,7 +22,7 @@ jobs:
     - name: Install dependencies
       run: |
         python -m pip install --upgrade pip
-        pip install -r requirements.txt
+        pip install uv
         
     - name: Generate daily report
       id: generate_report
@@ -34,7 +34,7 @@ jobs:
         EMAIL_PASSWORD: ${{ secrets.EMAIL_PASSWORD }}
         EMAIL_RECIPIENT: ${{ secrets.EMAIL_RECIPIENT }}
       run: |
-        python scripts/run_daily_report.py
+        uv run scripts/run_daily_report.py
         # Get the report filename and set it as an output
         REPORT_DATE=$(date +%Y-%m-%d)
         REPORT_FILE="reports/arxiv_cv_report_${REPORT_DATE}.md"
@@ -109,4 +109,43 @@ jobs:
         git config user.email "actions@github.com"
         git add .
         git commit -m "Update Arxiv Report for ${{ steps.generate_report.outputs.report_date }}"
+        git push
+
+    - name: Check repository owner
+      id: check_owner
+      run: |
+        REPO_OWNER=$(echo ${{ github.repository }} | cut -d '/' -f 1)
+        if [ "$REPO_OWNER" == "Owen-Liuyuxuan" ]; then
+          echo "is_owner=true" >> $GITHUB_OUTPUT
+        else
+          echo "is_owner=false" >> $GITHUB_OUTPUT
+        fi
+
+    - name: Checkout papers_reading_sharing.github.io
+      if: steps.check_owner.outputs.is_owner == 'true'
+      uses: actions/checkout@v4
+      with:
+        repository: Owen-Liuyuxuan/papers_reading_sharing.github.io
+        path: papers_site
+        token: ${{ secrets.PERSONAL_TOKEN }}
+
+    - name: Update papers_reading_sharing.github.io
+      if: steps.check_owner.outputs.is_owner == 'true'
+      run: |
+        # Create directory if it doesn't exist
+        mkdir -p papers_site/docs/other_categories/daily
+        
+        # Copy the report to the papers_reading_sharing.github.io repository
+
+        DATE_FORMAT=$(date +%Y%m%d)
+        sed -i "1s/^/time: ${DATE_FORMAT}\n\n/" "${{ steps.generate_report.outputs.report_file }}"
+
+        cp ${{ steps.generate_report.outputs.report_file }} "papers_site/docs/other_categories/daily/arxiv_cv_report_${{ steps.generate_report.outputs.report_date }}.md"
+        
+        # Commit and push changes
+        cd papers_site
+        git config user.name "GitHub Actions Bot"
+        git config user.email "actions@github.com"
+        git add .
+        git commit -m "Add Arxiv Report for ${{ steps.generate_report.outputs.report_date }}"
         git push

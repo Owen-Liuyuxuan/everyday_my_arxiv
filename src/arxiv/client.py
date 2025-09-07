@@ -82,7 +82,7 @@ class ArxivClient:
                     'title': result.title,
                     'authors': [author.name for author in result.authors],
                     'abstract': result.summary,
-                    'pdf_url': result.pdf_url,
+                    'pdf_url': result.pdf_url.replace("http", "https"),
                     'published_date': result.published.strftime('%Y-%m-%d'),
                     'updated_date': result.updated.strftime('%Y-%m-%d'),
                     'categories': result.categories,
@@ -196,7 +196,7 @@ class ArxivClient:
                     'title': result.title,
                     'authors': [author.name for author in result.authors],
                     'abstract': result.summary,
-                    'pdf_url': result.pdf_url,
+                    'pdf_url': result.pdf_url.replace("http", "https"),
                     'published_date': result.published.strftime('%Y-%m-%d'),
                     'categories': result.categories,
                     'primary_category': result.primary_category

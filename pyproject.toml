@@ -1,0 +1,14 @@
+[project]
+name = "arxiv-analyzer"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "arxiv==2.2.0",
+    "google-genai>=1.31.0",
+    "httpx==0.28.1",
+    "markdown==3.8",
+    "python-dotenv==1.1.0",
+    "scholarly==1.7.11",
+]

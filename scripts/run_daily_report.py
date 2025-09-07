@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """
-Main script to run the daily Arxiv paper report.
+Main script to run the daily Arxiv paper report with enhanced paper selection using
+Gemini AI to determine relevance and significance.
 """
 import argparse
 import datetime
@@ -19,20 +20,27 @@ from src.output.markdown import MarkdownReportGenerator
 from src.output.email import EmailNotifier
 from src.utils.citation import CitationAnalyzer
 from src.utils.filters import PaperFilter
+from src.utils.ranking import PaperRanker
 
 def main():
-    """Run the daily Arxiv paper report."""
+    """Run the daily Arxiv paper report with enhanced AI-based paper selection."""
     parser = argparse.ArgumentParser(description="Generate daily Arxiv paper report")
     parser.add_argument("--config", default="config/config.json", help="Path to config file")
     parser.add_argument("--keywords", default="config/keywords.json", help="Path to keywords file")
     parser.add_argument("--date", help="Report date (YYYY-MM-DD), defaults to today")
     parser.add_argument("--no-email", action="store_true", help="Disable email notification")
-    parser.add_argument("--language", default="en", help="Output language (e.g., en, zh)")
+    parser.add_argument("--skip-scoring", action="store_true", help="Skip AI-based paper scoring")
     args = parser.parse_args()
     
     # Load configuration
     with open(args.config, 'r') as f:
         config = json.load(f)
+    
+    # Load keywords
+    with open(args.keywords, 'r') as f:
+        keywords_config = json.load(f)
+        keywords = keywords_config.get('primary_keywords', []) + keywords_config.get('secondary_keywords', [])
+        exclude_keywords = keywords_config.get('exclude_keywords', [])
     
     # Set date
     if args.date:
@@ -48,8 +56,8 @@ def main():
     gemini_client = GeminiClient(config_path=args.config)
     markdown_generator = MarkdownReportGenerator(config_path=args.config)
     email_notifier = EmailNotifier(config_path=args.config)
-    citation_analyzer = CitationAnalyzer(min_citations_for_highlight=config['arxiv']['min_citations_for_highlight'])
     paper_filter = PaperFilter()
+    paper_ranker = PaperRanker(min_combined_score=config.get('ranking', {}).get('min_combined_score', 4))
     
     # 1. Fetch recent papers
     print("Fetching recent papers from Arxiv...")
@@ -63,26 +71,22 @@ def main():
     recent_papers = paper_filter.filter_by_category(recent_papers, categories=config['arxiv']['categories'])
     print(f"Found {len(recent_papers)} papers in the specified categories")
     
-    # 4. Match keywords and filter papers
-    keyword_matched_papers = arxiv_parser.filter_papers_by_keywords(recent_papers)
-    print(f"Found {len(keyword_matched_papers)} papers matching keywords")
+    # 4. Initial filtering using keyword matching
+    # Score papers using Gemini for relevance and significance
+    print("Scoring papers for relevance and significance using Gemini...")
+    scored_papers = gemini_client.batch_score_papers(
+        recent_papers, 
+        keywords=keywords,
+        negative_keywords=exclude_keywords
+    )
     
-    # # 5. Get most cited papers from the past N days
-    # print("Fetching citation data for recent papers...")
-    # most_cited_papers = arxiv_client.get_most_cited_papers(days=config['arxiv']['citation_lookback_days'])
-    # highly_cited_papers = citation_analyzer.identify_highly_cited_papers(most_cited_papers)
-    # print(f"Found {len(highly_cited_papers)} highly cited papers")
-    
-    # # 6. Combine keyword-matched and highly-cited papers
-    # combined_papers = keyword_matched_papers + highly_cited_papers
-    combined_papers = paper_filter.filter_duplicates(keyword_matched_papers)
-    
-    # 7. Limit the number of papers
+    # 7. Select top papers based on combined score
+    print("Selecting top papers based on relevance and significance scores...")
     max_papers = config['report']['max_papers']
-    selected_papers = paper_filter.limit_papers(combined_papers, limit=max_papers)
+    selected_papers = paper_ranker.select_top_papers(scored_papers, limit=max_papers)
     print(f"Selected {len(selected_papers)} papers for the report")
     
-    # 8. Analyze papers using Gemini
+    # 7. Analyze papers using Gemini
     print("Analyzing papers with Gemini...")
     for i, paper in enumerate(selected_papers):
         print(f"Analyzing paper {i+1}/{len(selected_papers)}: {paper['title']}")
@@ -100,11 +104,11 @@ def main():
             # Fall back to abstract-based analysis
             paper['analysis'] = gemini_client.analyze_paper_from_abstract(paper)
     
-    # 9. Generate report summary
+    # 8. Generate report summary
     print("Generating report summary...")
     report_summary = gemini_client.generate_report_summary(selected_papers, report_type="daily")
     
-    # 10. Generate Markdown report
+    # 9. Generate Markdown report
     print("Generating Markdown report...")
     markdown_report = markdown_generator.generate_daily_report(
         papers=selected_papers,
@@ -112,17 +116,17 @@ def main():
         date=report_date
     )
     
-    # 11. Save report
+    # 10. Save report
     report_filename = f"arxiv_cv_report_{report_date}.md"
     markdown_path = markdown_generator.save_report(markdown_report, filename=report_filename)
     
-    # 12. Convert to HTML if needed
+    # 11. Convert to HTML if needed
     html_path = None
     if 'html' in config['report']['output_format']:
         print("Converting report to HTML...")
         html_path = markdown_generator.convert_to_html(markdown_path)
     
-    # 13. Send email notification if enabled
+    # 12. Send email notification if enabled
     if not args.no_email and config['email']['enabled']:
         print("Sending email notification...")
         email_notifier.send_report_notification(
