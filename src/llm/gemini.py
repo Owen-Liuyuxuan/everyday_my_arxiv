@@ -1,12 +1,13 @@
 """
-Google Gemini API client for paper analysis and summarization.
+Google Gemini API client for paper analysis, summarization, and relevance scoring.
 """
 import json
 import os
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Tuple
 
 from google import genai
 from google.genai import types
+import re
 
 class GeminiClient:
     def __init__(self, config_path: str = "config/config.json"):
@@ -25,6 +26,7 @@ class GeminiClient:
         self.temperature = self.config['temperature']
         self.max_output_tokens = self.config['max_output_tokens']
         self.summary_length = self.config['summary_length']
+        self.batch_size = self.config.get('batch_size', 16)  # Default batch size if not specified
     
     def _load_prompt_template(self, prompt_name: str) -> str:
         """Load a prompt template from file."""
@@ -60,6 +62,7 @@ class GeminiClient:
         generation_config = types.GenerateContentConfig(
             temperature=self.temperature,
             max_output_tokens=self.max_output_tokens,
+            thinking_config=types.ThinkingConfig(thinking_budget=0)
         )
         
         # Call the Gemini API with the PDF content
@@ -104,6 +107,7 @@ class GeminiClient:
         generation_config = types.GenerateContentConfig(
             temperature=self.temperature,
             max_output_tokens=self.max_output_tokens,
+            thinking_config=types.ThinkingConfig(thinking_budget=0)
         )
         
         # Call the Gemini API
@@ -148,6 +152,7 @@ class GeminiClient:
         generation_config = types.GenerateContentConfig(
             temperature=self.temperature,
             max_output_tokens=self.max_output_tokens,
+            thinking_config=types.ThinkingConfig(thinking_budget=0)
         )
         
         # Call the Gemini API
@@ -183,6 +188,7 @@ class GeminiClient:
         generation_config = types.GenerateContentConfig(
             temperature=0.1,  # Lower temperature for more accurate translation
             max_output_tokens=self.max_output_tokens,
+            thinking_config=types.ThinkingConfig(thinking_budget=0)
         )
         
         # Call the Gemini API
@@ -193,3 +199,95 @@ class GeminiClient:
         )
         
         return response.text
+        
+    def score_paper_relevance(self, paper: Dict, keywords: List[str], 
+                             negative_keywords: List[str] = None) -> Dict:
+        """
+        Score a paper's relevance and significance based on metadata and user preferences.
+        
+        Args:
+            paper: Paper object with title, authors, abstract, etc.
+            keywords: List of keywords of interest
+            negative_keywords: List of keywords to avoid (optional)
+            
+        Returns:
+            Dictionary with relevance and significance scores
+        """
+        # Load the relevance scoring prompt template
+        prompt_template = self._load_prompt_template("relevance_scoring")
+        
+        # Format the prompt with paper metadata and user preferences
+        prompt = prompt_template.format(
+            title=paper['title'],
+            authors=", ".join(paper['authors']),
+            abstract=paper['abstract'],
+            categories=", ".join(paper['categories']),
+            published_date=paper['published_date'],
+            keywords=", ".join(keywords),
+            negative_keywords=", ".join(negative_keywords or [])
+        )
+        
+        # Create generation config with lower temperature for more consistent scoring
+        generation_config = types.GenerateContentConfig(
+            temperature=0.05, # for very accurate and stable evaluation
+            max_output_tokens=1024,
+            thinking_config=types.ThinkingConfig(thinking_budget=0)
+        )
+        
+        # Call the Gemini API
+        response = self.client.models.generate_content(
+            model=self.model_name,
+            contents=prompt,
+            config=generation_config
+        )
+        
+        try:
+            # Parse the JSON response
+            json_match = re.search(r"\{.*\}", response.text, re.DOTALL)
+            if json_match:
+                json_str = json_match.group()
+                result = json.loads(json_str)
+                return result
+            else:
+                return {"error": "No valid JSON found in scoring", "raw_response": response}
+        except json.JSONDecodeError:
+            # Fallback if response is not valid JSON
+            return {
+                "relevance_score": 1,
+                "significance_score": 1,
+                "combined_score": 2
+            }
+    
+    def batch_score_papers(self, papers: List[Dict], keywords: List[str], 
+                          negative_keywords: List[str] = None) -> List[Dict]:
+        """
+        Score multiple papers in batches for efficiency.
+        
+        Args:
+            papers: List of paper objects
+            keywords: List of keywords of interest
+            negative_keywords: List of keywords to avoid (optional)
+            
+        Returns:
+            List of papers with added relevance and significance scores
+        """
+        scored_papers = []
+        
+        # Process papers in batches
+        for i in range(0, len(papers), self.batch_size):
+            batch = papers[i:i + self.batch_size]
+            print(f"Scoring batch {i//self.batch_size + 1}/{(len(papers)-1)//self.batch_size + 1} " +
+                  f"({len(batch)} papers)")
+            
+            # Process each paper in the batch
+            for paper in batch:
+                scores = self.score_paper_relevance(paper, keywords, negative_keywords)
+                
+                # Add scores to the paper object
+                paper['relevance_score'] = scores.get('relevance_score', 1)
+                paper['significance_score'] = scores.get('significance_score', 1)
+                paper['combined_score'] = scores.get('combined_score', 2)
+                
+                scored_papers.append(paper)
+                
+        return scored_papers

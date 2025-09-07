@@ -34,7 +34,18 @@
     "benchmark"
   ],
   "exclude_keywords": [
-    "medical"
+    "medical",
+    "medical imaging",
+    "healthcare",
+    "EEG",
+    "fMRI",
+    "satellite",
+    "remote sensing",
+    "indoor",
+    "fashion",
+    "social",
+    "AI safety",
+    "emotion"
   ],
   "author_preferences": [],
   "weight_factors": {

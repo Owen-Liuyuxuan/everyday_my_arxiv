@@ -2,6 +2,14 @@
 
 An automated system that generates daily reports on the latest Computer Vision and Pattern Recognition papers from Arxiv, based on keywords and citation metrics.
 
+## Recent Updates
+
+- **Paper Scoring**: Added intelligent paper scoring using Gemini API to rank papers by relevance and significance
+- **Performance Optimization**: Disabled thinking budget in Gemini API calls for better command following and cost savings
+- **PDF Processing**: Fixed bug in PDF reading functionality
+- **Repository Structure**: Updated folder structure for better organization
+
+
 ## Features
 
 - Daily monitoring of new Arxiv papers in Computer Vision and Pattern Recognition
@@ -10,6 +18,9 @@ An automated system that generates daily reports on the latest Computer Vision a
 - Automated report generation in Markdown/HTML format
 - Email notifications with daily findings
 - GitHub Actions automation for daily execution
+- **NEW**: Paper relevance and significance scoring using Gemini AI
+- **NEW**: Optimized Gemini API usage with disabled thinking budget for better command following and cost savings
+- **NEW** Allow usiog `uv sync` to directly create local environment from pyproject.toml
 
 ## System Architecture
 
@@ -20,7 +31,7 @@ The following diagram illustrates the architecture and workflow of the Arxiv Pap
 ## Repository Structure
 
 ```
-arxiv-paper-reports/
+arxiv-analyzer/
 ├── config/                   # Configuration files
 │   ├── keywords.json         # Keywords for paper filtering
 │   └── config.json           # General configuration
@@ -31,14 +42,18 @@ arxiv-paper-reports/
 │   ├── llm/                  # LLM integration
 │   │   ├── gemini.py         # Google Gemini API client
 │   │   └── prompts/          # Prompt templates
-│   │       ├── summary.txt   # Summary generation prompt
-│   │       └── review.txt    # Critical review prompt
+│   │       ├── summary.txt           # Summary generation prompt
+│   │       ├── review.txt            # Critical review prompt
+│   │       ├── relevance_scoring.txt # Paper scoring prompt
+│   │       ├── report_summary.txt    # Report summary prompt
+│   │       └── translate.txt         # Translation prompt
 │   ├── output/               # Output generation
 │   │   ├── markdown.py       # Markdown report generator
 │   │   └── email.py          # Email notification
 │   └── utils/                # Utility functions
 │       ├── citation.py       # Citation metrics
-│       └── filters.py        # Paper filtering logic
+│       ├── filters.py        # Paper filtering logic
+│       └── ranking.py        # Paper ranking and selection
 ├── scripts/                  # Scripts
 │   ├── run_daily_report.py   # Main script for daily execution
 │   └── test_local.py         # Local testing script
@@ -46,6 +61,7 @@ arxiv-paper-reports/
 ├── .github/                  # GitHub configuration
 │   └── workflows/            # GitHub Actions workflows
 │       └── daily_report.yml  # Daily report workflow
+├── pyproject.toml            # Python project configuration
 ├── requirements.txt          # Python dependencies
 └── README.md                 # Project documentation
 ```
@@ -62,6 +78,16 @@ arxiv-paper-reports/
 ## Configuration
 
 Edit `config/keywords.json` to specify your research interests. The system will filter papers based on these keywords.
+
+### Paper Scoring System
+
+The system now features an advanced paper scoring mechanism using Google's Gemini API:
+
+- **Relevance Score (1-3)**: Measures how well a paper matches your research interests
+- **Significance Score (1-3)**: Evaluates the paper's scientific impact and importance
+- **Combined Score**: Sum of relevance and significance scores, used for ranking
+
+Papers are automatically filtered based on minimum combined score thresholds that you can configure in `config/config.json`.
 
 ## GitHub Actions Setup
 

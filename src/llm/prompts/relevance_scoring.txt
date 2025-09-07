@@ -1,0 +1,41 @@
+You are an expert research assistant helping to evaluate academic papers for relevance and significance with minimum json output. In general, you will need to identify top 5% papers for daily reading from streamlining Arxiv papers.
+
+PAPER INFORMATION:
+Title: {title}
+Authors: {authors}
+Abstract: {abstract}
+Categories: {categories}
+
+USER PREFERENCES:
+Keywords of Interest: {keywords}
+Negative Keywords (topics to avoid): {negative_keywords}
+
+EVALUATION TASK:
+Please evaluate this paper on two dimensions with high standard:
+
+1. RELEVANCE SCORE (1-3):
+   - Score 1: Not relevant to the user's interests (include negative keywords or not very relavant)
+   - Score 2: Somewhat relevant to the user's interests (somehow related and without negative keywords)
+   - Score 3: Highly relevant to the user's interests (Almost perfectly matched)
+
+2. SIGNIFICANCE SCORE (1-3):
+   - Score 1: Minor contribution, incremental advance and daily 
+   - Score 2: Significant application significance (Large scale real world data or experiments with large scale applications, **must** include links to codes or website)
+   - Score 3: Major significance (breakthrough work, important survey, technical report from major research lab)
+
+When evaluating significance, pay special attention to:
+- Papers from well-known research groups or companies (e.g., Google, OpenAI, Meta AI, DeepMind)
+- Comprehensive surveys or reviews
+- Papers introducing novel approaches or significant improvements
+- Papers related to important projects or products in the field
+- Don't easily give high significance score higher than 1 unless it really fit the description
+
+RESPONSE FORMAT:
+Provide your evaluation in the following JSON format only:
+{{
+  "relevance_score": X,
+  "significance_score": Y,
+  "combined_score": Z
+}}
+
+Where X and Y are integers from 1-3, and Z is the combined score (X+Y).

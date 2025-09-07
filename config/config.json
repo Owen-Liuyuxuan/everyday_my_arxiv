@@ -22,7 +22,14 @@
   "llm": {
     "model": "gemini-2.5-flash",
     "temperature": 0.2,
-    "max_output_tokens": 8096,
-    "summary_length": "medium"
+    "max_output_tokens": 4096,
+    "summary_length": "medium",
+    "batch_size": 16
+  },
+  "ranking": {
+    "min_combined_score": 4,
+    "relevance_weight": 0.6,
+    "significance_weight": 0.4,
+    "pre_filter_factor": 3
   }
 }
