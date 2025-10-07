@@ -101,7 +101,8 @@ def main():
             # Analyze using the full PDF
             paper['analysis'] = gemini_client.analyze_paper_from_pdf(pdf_data, paper)
         else:
-            # Fall back to abstract-based analysis
+            # Fall back to abstract-based analysis if PDF is too large (>20MB) or download fails
+            print(f"Falling back to abstract-based analysis for {paper['title']}")
             paper['analysis'] = gemini_client.analyze_paper_from_abstract(paper)
     
     # 8. Generate report summary

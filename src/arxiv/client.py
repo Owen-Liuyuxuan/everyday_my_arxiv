@@ -145,9 +145,24 @@ class ArxivClient:
             pdf_url: URL to the PDF file
             
         Returns:
-            PDF content as bytes
+            PDF content as bytes or empty bytes if the file is too large (>20MB) or download fails
         """
         try:
+            # First make a HEAD request to check the file size
+            head_response = httpx.head(pdf_url, timeout=10.0)
+            head_response.raise_for_status()
+            
+            # Check if Content-Length header exists
+            content_length = head_response.headers.get('Content-Length')
+            if content_length:
+                # Convert to integer (bytes)
+                file_size = int(content_length)
+                # 20MB = 20 * 1024 * 1024 bytes
+                if file_size > 20 * 1024 * 1024:
+                    print(f"PDF from {pdf_url} is too large ({file_size / (1024 * 1024):.2f} MB), skipping download")
+                    return b''
+            
+            # If size is acceptable or unknown, proceed with download
             response = httpx.get(pdf_url, timeout=30.0)
             response.raise_for_status()
             return response.content
