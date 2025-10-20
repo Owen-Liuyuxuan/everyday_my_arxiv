@@ -1,6 +1,6 @@
 {
   "arxiv": {
-    "categories": ["cs.CV"],
+    "categories": ["cs.CV", "cs.RO"],
     "max_results": 200,
     "recent_days": 3,
     "adaptive_recent_days": true,
