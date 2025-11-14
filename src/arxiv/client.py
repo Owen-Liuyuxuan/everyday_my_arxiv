@@ -5,6 +5,9 @@ import datetime
 import json
 import time
 from typing import Dict, List, Optional, Tuple
+import xml.etree.ElementTree as ET
+import urllib.request
+import urllib.parse
 
 import arxiv
 import httpx
@@ -22,6 +25,8 @@ class ArxivClient:
         self.base_recent_days = self.config['recent_days']
         self.adaptive_recent_days = self.config["adaptive_recent_days"]
         self.citation_lookback_days = self.config['citation_lookback_days']
+
+        self.base_url = 'http://export.arxiv.org/api/query'
     
     @property
     def recent_days(self) -> int:
@@ -41,61 +46,175 @@ class ArxivClient:
                 return 2
         else:
             return self.base_recent_days
-    
+        
     def get_recent_papers(self) -> List[Dict]:
         """
-        Fetch recent papers from Arxiv based on the configured categories.
+        Fetch papers from arXiv with comprehensive field extraction.
         
-        Returns:
-            List of paper objects with metadata
-        """
-        # Calculate date range for recent papers
-        today = datetime.datetime.now()
-        # Use the adaptive recent_days property
-        date_filter = today - datetime.timedelta(days=self.recent_days)
-        
-        print(f"Using adaptive recent_days: {self.recent_days}")
-        
-        # Construct the query for Arxiv API
-        query = " OR ".join([f"cat:{category}" for category in self.categories])
-        
-        # Fetch papers from Arxiv
-        client = arxiv.Client()
-        search = arxiv.Search(
-            query=query,
-            max_results=self.max_results,
-            sort_by=arxiv.SortCriterion.SubmittedDate,
-            sort_order=arxiv.SortOrder.Descending
-        )
-        
-        papers = []
-        for result in client.results(search):
-            # Convert to datetime for comparison
-            published_date = result.published.replace(tzinfo=None)
-
-            # print(f"title: {result.title}, published_date: {published_date}")
+        Args:
+            categories: List of arXiv categories to search
+            days_back: Number of days to look back (optional)
+            date_filter: Only include papers published after this date (optional)
             
-            # Only include papers within the date range
-            if published_date >= date_filter:
-                paper = {
-                    'id': result.entry_id.split('/')[-1],
-                    'title': result.title,
-                    'authors': [author.name for author in result.authors],
-                    'abstract': result.summary,
-                    'pdf_url': result.pdf_url.replace("http", "https"),
-                    'published_date': result.published.strftime('%Y-%m-%d'),
-                    'updated_date': result.updated.strftime('%Y-%m-%d'),
-                    'categories': result.categories,
-                    'comment': getattr(result, 'comment', ''),
-                    'journal_ref': getattr(result, 'journal_ref', ''),
-                    'doi': getattr(result, 'doi', ''),
-                    'primary_category': result.primary_category
-                }
-                papers.append(paper)
+        Returns:
+            List of paper dictionaries with all relevant fields
+        """
+        # Build the search query
+        cat_query = ' OR '.join([f'cat:{cat}' for cat in self.categories])
+        end_date = datetime.datetime.now()
+        start_date = end_date - datetime.timedelta(days=self.recent_days)
+        start_str = start_date.strftime('%Y%m%d') + '0000'
+        end_str = end_date.strftime('%Y%m%d') + '2359'
+        search_query = f'({cat_query}) AND submittedDate:[{start_str} TO {end_str}]'
+
         
-        print(f"Found {len(papers)} recent papers in the specified categories")
+        # Build URL parameters
+        params = {
+            'search_query': search_query,
+            'start': 0,
+            'max_results': self.max_results + 100,
+            'sortBy': 'submittedDate',
+            'sortOrder': 'descending'
+        }
+        
+        url = self.base_url + '?' + urllib.parse.urlencode(params)
+        
+        print(f"Fetching papers from arXiv API...")
+        print(f"Categories: {', '.join(self.categories)}")
+        print(f"Date range: Last {self.recent_days} days")
+        print(f"Query URL: {url}\n")
+        
+        # Fetch data from API
+        try:
+            with urllib.request.urlopen(url) as response:
+                data = response.read().decode('utf-8')
+        except Exception as e:
+            print(f"Error fetching data from arXiv API: {e}")
+            return []
+        
+        # Parse XML response
+        papers = self._parse_arxiv_response(data)
+        
+        # Sort by published date (descending) - CLIENT-SIDE SORTING
+        papers.sort(key=lambda x: x['published_datetime'], reverse=True)
+        papers = papers[:self.max_results]
+        
+        print(f"Successfully fetched and sorted {len(papers)} papers\n")
+        
         return papers
     
+    def _parse_arxiv_response(
+        self, 
+        xml_data: str) -> List[Dict]:
+        """
+        Parse the XML response from arXiv API and extract all relevant fields.
+        
+        Args:
+            xml_data: XML response string from arXiv API
+            date_filter: Optional datetime filter for published date
+            
+        Returns:
+            List of paper dictionaries
+        """
+        root = ET.fromstring(xml_data)
+        
+        # Define XML namespaces
+        namespaces = {
+            'atom': 'http://www.w3.org/2005/Atom',
+            'arxiv': 'http://arxiv.org/schemas/atom'
+        }
+        
+        entries = root.findall('atom:entry', namespaces)
+        papers = []
+        
+        for entry in entries:
+            try:
+                # Extract basic fields
+                entry_id = entry.find('atom:id', namespaces).text
+                title = entry.find('atom:title', namespaces).text.strip().replace('\n', ' ')
+                summary = entry.find('atom:summary', namespaces).text.strip().replace('\n', ' ')
+                
+                # Extract dates
+                published_str = entry.find('atom:published', namespaces).text
+                updated_str = entry.find('atom:updated', namespaces).text
+                
+                # Parse dates
+                published_datetime = datetime.datetime.fromisoformat(published_str.replace('Z', '+00:00')).replace(tzinfo=None)
+                updated_datetime = datetime.datetime.fromisoformat(updated_str.replace('Z', '+00:00')).replace(tzinfo=None)
+                
+                # Extract authors
+                authors = []
+                for author in entry.findall('atom:author', namespaces):
+                    author_name = author.find('atom:name', namespaces)
+                    if author_name is not None:
+                        authors.append(author_name.text)
+                
+                # Extract categories
+                categories = []
+                primary_category = None
+                for i, category in enumerate(entry.findall('atom:category', namespaces)):
+                    cat_term = category.get('term')
+                    if cat_term:
+                        categories.append(cat_term)
+                        if i == 0:  # First category is primary
+                            primary_category = cat_term
+                
+                # Extract links
+                pdf_url = None
+                abs_url = None
+                for link in entry.findall('atom:link', namespaces):
+                    link_type = link.get('type')
+                    link_href = link.get('href')
+                    if link_type == 'application/pdf':
+                        pdf_url = link_href.replace('http://', 'https://')
+                    elif link.get('rel') == 'alternate':
+                        abs_url = link_href.replace('http://', 'https://')
+                
+                # Extract optional arXiv-specific fields
+                comment_elem = entry.find('arxiv:comment', namespaces)
+                comment = comment_elem.text if comment_elem is not None else ''
+                
+                journal_ref_elem = entry.find('arxiv:journal_ref', namespaces)
+                journal_ref = journal_ref_elem.text if journal_ref_elem is not None else ''
+                
+                doi_elem = entry.find('arxiv:doi', namespaces)
+                doi = doi_elem.text if doi_elem is not None else ''
+                
+                primary_category_elem = entry.find('arxiv:primary_category', namespaces)
+                if primary_category_elem is not None:
+                    primary_category = primary_category_elem.get('term', primary_category)
+                
+                # Extract arXiv ID from entry_id
+                arxiv_id = entry_id.split('/abs/')[-1] if '/abs/' in entry_id else entry_id.split('/')[-1]
+                
+                # Build paper dictionary matching the arxiv library format
+                paper = {
+                    'id': arxiv_id,
+                    'title': title,
+                    'authors': authors,
+                    'abstract': summary,
+                    'pdf_url': pdf_url or f"https://arxiv.org/pdf/{arxiv_id}.pdf",
+                    'abs_url': abs_url or f"https://arxiv.org/abs/{arxiv_id}",
+                    'published_date': published_datetime.strftime('%Y-%m-%d'),
+                    'updated_date': updated_datetime.strftime('%Y-%m-%d'),
+                    'published_datetime': published_datetime,  # Keep for sorting
+                    'updated_datetime': updated_datetime,
+                    'categories': categories,
+                    'primary_category': primary_category,
+                    'comment': comment,
+                    'journal_ref': journal_ref,
+                    'doi': doi,
+                    'entry_id': entry_id
+                }
+                
+                papers.append(paper)
+                
+            except Exception as e:
+                print(f"Error parsing entry: {e}")
+                continue
+        
+        return papers
+
     def get_citation_data(self, papers: List[Dict], max_papers: int = 20) -> List[Dict]:
         """
         Fetch citation data for papers using Google Scholar.
