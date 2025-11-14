@@ -5,7 +5,7 @@ description = "Add your description here"
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
-    "arxiv==2.2.0",
+    "arxiv==2.3.1",
     "google-genai>=1.31.0",
     "httpx==0.28.1",
     "markdown==3.8",
