@@ -193,7 +193,7 @@ class ArxivClient:
                     'title': title,
                     'authors': authors,
                     'abstract': summary,
-                    'pdf_url': pdf_url or f"https://arxiv.org/pdf/{arxiv_id}.pdf",
+                    'pdf_url': pdf_url or f"https://arxiv.org/pdf/{arxiv_id}",
                     'abs_url': abs_url or f"https://arxiv.org/abs/{arxiv_id}",
                     'published_date': published_datetime.strftime('%Y-%m-%d'),
                     'updated_date': updated_datetime.strftime('%Y-%m-%d'),
