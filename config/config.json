@@ -20,7 +20,7 @@
     "include_summary": true
   },
   "llm": {
-    "model": "gemini-2.5-flash",
+    "model": "gemini-2.5-flash-lite",
     "temperature": 0.2,
     "max_output_tokens": 4096,
     "summary_length": "medium",
