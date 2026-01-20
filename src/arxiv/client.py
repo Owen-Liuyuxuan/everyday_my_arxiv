@@ -43,7 +43,7 @@ class ArxivClient:
             if today.weekday() == 0:  # If today is Monday
                 return 3
             else:
-                return 3
+                return 4
         else:
             return self.base_recent_days
         
