@@ -50,13 +50,16 @@ class GeminiClient:
         # Load the appropriate prompt template
         prompt_template = self._load_prompt_template(prompt_type)
         
-        # Format the prompt with paper metadata
-        prompt = prompt_template.format(
-            title=paper_metadata['title'],
-            authors=", ".join(paper_metadata['authors']),
-            abstract=paper_metadata['abstract'],
-            summary_length=self.summary_length
-        )
+        # # Format the prompt with paper metadata
+        # prompt = prompt_template.format(
+        #     title=paper_metadata['title'],
+        #     authors=", ".join(paper_metadata['authors']),
+        #     abstract=paper_metadata['abstract'],
+        #     summary_length=self.summary_length
+        # )
+        
+        ## Updated to directly use the prompt template without wrapping in Part
+        prompt = prompt_template 
         
         # Create generation config
         generation_config = types.GenerateContentConfig(
