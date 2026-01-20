@@ -24,9 +24,9 @@ class GeminiClient:
         
         self.model_name = self.config['model']
         self.temperature = self.config['temperature']
-        self.max_output_tokens = self.config['max_output_tokens']
+        self.max_output_tokens = int(self.config['max_output_tokens'])
         self.summary_length = self.config['summary_length']
-        self.batch_size = self.config.get('batch_size', 16)  # Default batch size if not specified
+        self.batch_size = int(self.config.get('batch_size', 16))  # Default batch size if not specified
     
     def _load_prompt_template(self, prompt_name: str) -> str:
         """Load a prompt template from file."""
@@ -50,13 +50,16 @@ class GeminiClient:
         # Load the appropriate prompt template
         prompt_template = self._load_prompt_template(prompt_type)
         
-        # Format the prompt with paper metadata
-        prompt = prompt_template.format(
-            title=paper_metadata['title'],
-            authors=", ".join(paper_metadata['authors']),
-            abstract=paper_metadata['abstract'],
-            summary_length=self.summary_length
-        )
+        # # Format the prompt with paper metadata
+        # prompt = prompt_template.format(
+        #     title=paper_metadata['title'],
+        #     authors=", ".join(paper_metadata['authors']),
+        #     abstract=paper_metadata['abstract'],
+        #     summary_length=self.summary_length
+        # )
+        
+        ## Updated to directly use the prompt template without wrapping in Part
+        prompt = prompt_template 
         
         # Create generation config
         generation_config = types.GenerateContentConfig(
