@@ -24,9 +24,9 @@ class GeminiClient:
         
         self.model_name = self.config['model']
         self.temperature = self.config['temperature']
-        self.max_output_tokens = self.config['max_output_tokens']
+        self.max_output_tokens = int(self.config['max_output_tokens'])
         self.summary_length = self.config['summary_length']
-        self.batch_size = self.config.get('batch_size', 16)  # Default batch size if not specified
+        self.batch_size = int(self.config.get('batch_size', 16))  # Default batch size if not specified
     
     def _load_prompt_template(self, prompt_name: str) -> str:
         """Load a prompt template from file."""
