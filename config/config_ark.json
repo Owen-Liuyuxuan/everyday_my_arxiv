@@ -1,0 +1,39 @@
+{
+  "arxiv": {
+    "categories": ["cs.CV", "cs.RO"],
+    "max_results": 200,
+    "recent_days": 3,
+    "adaptive_recent_days": true,
+    "citation_lookback_days": 60,
+    "min_citations_for_highlight": 5
+  },
+  "report": {
+    "max_papers": 10,
+    "languages": ["en"],
+    "output_format": ["markdown", "html"],
+    "output_directory": "reports"
+  },
+  "email": {
+    "enabled": true,
+    "subject_prefix": "[Arxiv CV Report]",
+    "include_full_report": true,
+    "include_summary": true
+  },
+  "llm": {
+    "provider": "ark",
+    "text_model": "doubao-seed-1-6-flash-2508285",
+    "document_model": "doubao-seed-1-6-flash-250828",
+    "base_url": "https://ark.cn-beijing.volces.com/api/v3",
+    "temperature": 0.2,
+    "max_output_tokens": 4096,
+    "summary_length": "medium",
+    "batch_size": 16
+  },
+  "ranking": {
+    "min_combined_score": 4,
+    "relevance_weight": 0.6,
+    "significance_weight": 0.4,
+    "pre_filter_factor": 3
+  }
+}
+

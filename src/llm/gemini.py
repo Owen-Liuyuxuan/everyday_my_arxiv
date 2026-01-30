@@ -1,41 +1,76 @@
 """
 Google Gemini API client for paper analysis, summarization, and relevance scoring.
 """
-import json
 import os
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Optional
 
-from google import genai
-from google.genai import types
-import re
+from src.llm.base import BaseLLMClient
 
-class GeminiClient:
+
+class GeminiClient(BaseLLMClient):
+    """
+    LLM client using Google's Gemini API.
+    
+    Supports PDF analysis, abstract analysis, report summarization,
+    translation, and paper relevance scoring.
+    """
+    
     def __init__(self, config_path: str = "config/config.json"):
-        """Initialize the Gemini client with configuration."""
-        with open(config_path, 'r') as f:
-            self.config = json.load(f)['llm']
+        """
+        Initialize the Gemini client with configuration.
+        
+        Args:
+            config_path: Path to configuration file
+            
+        Raises:
+            ValueError: If GOOGLE_API_KEY environment variable is not set
+            ImportError: If google-genai package is not installed
+        """
+        # Initialize base class (loads config, sets common attributes)
+        super().__init__(config_path)
+        
+        # Lazy import of Google GenAI SDK
+        try:
+            from google import genai
+            from google.genai import types
+            self._genai = genai
+            self._types = types
+        except ImportError as e:
+            raise ImportError(
+                "Google GenAI SDK not installed. "
+                "Install with: pip install google-genai"
+            ) from e
         
         # Initialize the Google Generative AI client
         api_key = os.environ.get("GOOGLE_API_KEY")
         if not api_key:
             raise ValueError("GOOGLE_API_KEY environment variable is not set")
         
-        self.client = genai.Client(api_key=api_key)
-        
+        self.client = self._genai.Client(api_key=api_key)
         self.model_name = self.config['model']
-        self.temperature = self.config['temperature']
-        self.max_output_tokens = int(self.config['max_output_tokens'])
-        self.summary_length = self.config['summary_length']
-        self.batch_size = int(self.config.get('batch_size', 16))  # Default batch size if not specified
+        # Note: temperature, max_output_tokens, summary_length, batch_size 
+        # are already set by BaseLLMClient.__init__()
     
-    def _load_prompt_template(self, prompt_name: str) -> str:
-        """Load a prompt template from file."""
-        prompt_path = f"src/llm/prompts/{prompt_name}.txt"
-        with open(prompt_path, 'r') as f:
-            return f.read()
+    def _create_generation_config(self, temperature: Optional[float] = None,
+                                   max_tokens: Optional[int] = None):
+        """
+        Create a generation config for Gemini API calls.
+        
+        Args:
+            temperature: Override default temperature
+            max_tokens: Override default max_output_tokens
+            
+        Returns:
+            GenerateContentConfig instance
+        """
+        return self._types.GenerateContentConfig(
+            temperature=temperature or self.temperature,
+            max_output_tokens=max_tokens or self.max_output_tokens,
+            thinking_config=self._types.ThinkingConfig(thinking_budget=0)
+        )
     
     def analyze_paper_from_pdf(self, pdf_data: bytes, paper_metadata: Dict, 
-                              prompt_type: str = "summary") -> str:
+                               prompt_type: str = "summary") -> str:
         """
         Analyze a paper using its PDF content and metadata.
         
@@ -62,17 +97,13 @@ class GeminiClient:
         prompt = prompt_template 
         
         # Create generation config
-        generation_config = types.GenerateContentConfig(
-            temperature=self.temperature,
-            max_output_tokens=self.max_output_tokens,
-            thinking_config=types.ThinkingConfig(thinking_budget=0)
-        )
+        generation_config = self._create_generation_config()
         
         # Call the Gemini API with the PDF content
         response = self.client.models.generate_content(
             model=self.model_name,
             contents=[
-                types.Part.from_bytes(
+                self._types.Part.from_bytes(
                     data=pdf_data,
                     mime_type='application/pdf',
                 ),
@@ -83,7 +114,8 @@ class GeminiClient:
         
         return response.text
     
-    def analyze_paper_from_abstract(self, paper: Dict, prompt_type: str = "abstract_analysis") -> str:
+    def analyze_paper_from_abstract(self, paper: Dict, 
+                                    prompt_type: str = "abstract_analysis") -> str:
         """
         Analyze a paper using only its abstract and metadata.
         
@@ -107,11 +139,7 @@ class GeminiClient:
         )
         
         # Create generation config
-        generation_config = types.GenerateContentConfig(
-            temperature=self.temperature,
-            max_output_tokens=self.max_output_tokens,
-            thinking_config=types.ThinkingConfig(thinking_budget=0)
-        )
+        generation_config = self._create_generation_config()
         
         # Call the Gemini API
         response = self.client.models.generate_content(
@@ -122,7 +150,8 @@ class GeminiClient:
         
         return response.text
     
-    def generate_report_summary(self, papers: List[Dict], report_type: str = "daily") -> str:
+    def generate_report_summary(self, papers: List[Dict], 
+                                report_type: str = "daily") -> str:
         """
         Generate a summary of multiple papers for the report.
         
@@ -152,11 +181,7 @@ class GeminiClient:
         )
         
         # Create generation config
-        generation_config = types.GenerateContentConfig(
-            temperature=self.temperature,
-            max_output_tokens=self.max_output_tokens,
-            thinking_config=types.ThinkingConfig(thinking_budget=0)
-        )
+        generation_config = self._create_generation_config()
         
         # Call the Gemini API
         response = self.client.models.generate_content(
@@ -188,11 +213,7 @@ class GeminiClient:
         )
         
         # Create generation config with lower temperature for translation
-        generation_config = types.GenerateContentConfig(
-            temperature=0.1,  # Lower temperature for more accurate translation
-            max_output_tokens=self.max_output_tokens,
-            thinking_config=types.ThinkingConfig(thinking_budget=0)
-        )
+        generation_config = self._create_generation_config(temperature=0.1)
         
         # Call the Gemini API
         response = self.client.models.generate_content(
@@ -202,11 +223,11 @@ class GeminiClient:
         )
         
         return response.text
-        
-    def score_paper_relevance(self, paper: Dict, keywords: List[str], 
-                             negative_keywords: List[str] = None) -> Dict:
+    
+    def _score_single_paper(self, paper: Dict, keywords: List[str],
+                            negative_keywords: Optional[List[str]] = None) -> Dict:
         """
-        Score a paper's relevance and significance based on metadata and user preferences.
+        Score a single paper's relevance and significance using Gemini.
         
         Args:
             paper: Paper object with title, authors, abstract, etc.
@@ -214,7 +235,7 @@ class GeminiClient:
             negative_keywords: List of keywords to avoid (optional)
             
         Returns:
-            Dictionary with relevance and significance scores
+            Dictionary with relevance_score, significance_score, and combined_score
         """
         # Load the relevance scoring prompt template
         prompt_template = self._load_prompt_template("relevance_scoring")
@@ -231,10 +252,9 @@ class GeminiClient:
         )
         
         # Create generation config with lower temperature for more consistent scoring
-        generation_config = types.GenerateContentConfig(
-            temperature=0.05, # for very accurate and stable evaluation
-            max_output_tokens=1024,
-            thinking_config=types.ThinkingConfig(thinking_budget=0)
+        generation_config = self._create_generation_config(
+            temperature=0.05,  # Very low for stable evaluation
+            max_tokens=1024
         )
         
         # Call the Gemini API
@@ -244,53 +264,14 @@ class GeminiClient:
             config=generation_config
         )
         
-        try:
-            # Parse the JSON response
-            json_match = re.search(r"\{.*\}", response.text, re.DOTALL)
-            if json_match:
-                json_str = json_match.group()
-                result = json.loads(json_str)
-                return result
-            else:
-                return {"error": "No valid JSON found in scoring", "raw_response": response}
-        except json.JSONDecodeError:
-            # Fallback if response is not valid JSON
-            return {
-                "relevance_score": 1,
-                "significance_score": 1,
-                "combined_score": 2
-            }
+        return self._parse_json_response(response.text)
     
-    def batch_score_papers(self, papers: List[Dict], keywords: List[str], 
-                          negative_keywords: List[str] = None) -> List[Dict]:
+    # Backward compatibility alias
+    def score_paper_relevance(self, paper: Dict, keywords: List[str],
+                              negative_keywords: Optional[List[str]] = None) -> Dict:
         """
-        Score multiple papers in batches for efficiency.
+        Alias for _score_single_paper for backward compatibility.
         
-        Args:
-            papers: List of paper objects
-            keywords: List of keywords of interest
-            negative_keywords: List of keywords to avoid (optional)
-            
-        Returns:
-            List of papers with added relevance and significance scores
+        Deprecated: Use batch_score_papers() instead.
         """
-        scored_papers = []
-        
-        # Process papers in batches
-        for i in range(0, len(papers), self.batch_size):
-            batch = papers[i:i + self.batch_size]
-            print(f"Scoring batch {i//self.batch_size + 1}/{(len(papers)-1)//self.batch_size + 1} " +
-                  f"({len(batch)} papers)")
-            
-            # Process each paper in the batch
-            for paper in batch:
-                scores = self.score_paper_relevance(paper, keywords, negative_keywords)
-                
-                # Add scores to the paper object
-                paper['relevance_score'] = scores.get('relevance_score', 1)
-                paper['significance_score'] = scores.get('significance_score', 1)
-                paper['combined_score'] = scores.get('combined_score', 2)
-                
-                scored_papers.append(paper)
-                
-        return scored_papers
+        return self._score_single_paper(paper, keywords, negative_keywords)

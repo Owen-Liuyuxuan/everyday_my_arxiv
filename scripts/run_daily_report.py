@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 Main script to run the daily Arxiv paper report with enhanced paper selection using
-Gemini AI to determine relevance and significance.
+LLM (Gemini or Ark) to determine relevance and significance.
 """
 import argparse
 import datetime
@@ -15,7 +15,7 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from src.arxiv.client import ArxivClient
 from src.arxiv.parser import ArxivParser
-from src.llm.gemini import GeminiClient
+from src.llm.factory import create_llm_client
 from src.output.markdown import MarkdownReportGenerator
 from src.output.email import EmailNotifier
 from src.utils.citation import CitationAnalyzer
@@ -30,6 +30,8 @@ def main():
     parser.add_argument("--date", help="Report date (YYYY-MM-DD), defaults to today")
     parser.add_argument("--no-email", action="store_true", help="Disable email notification")
     parser.add_argument("--skip-scoring", action="store_true", help="Skip AI-based paper scoring")
+    parser.add_argument("--provider", choices=["gemini", "ark"], default=None,
+                        help="LLM provider to use (auto-detected from config path if not specified)")
     args = parser.parse_args()
     
     # Load configuration
@@ -53,7 +55,12 @@ def main():
     # Initialize components
     arxiv_client = ArxivClient(config_path=args.config)
     arxiv_parser = ArxivParser(keywords_path=args.keywords)
-    gemini_client = GeminiClient(config_path=args.config)
+    
+    # Create LLM client using factory (auto-detects provider from config path)
+    llm_client = create_llm_client(config_path=args.config, provider=args.provider)
+    provider_name = config.get('llm', {}).get('provider', 'gemini')
+    print(f"Using LLM provider: {provider_name}")
+    
     markdown_generator = MarkdownReportGenerator(config_path=args.config)
     email_notifier = EmailNotifier(config_path=args.config)
     paper_filter = PaperFilter()
@@ -71,23 +78,22 @@ def main():
     recent_papers = paper_filter.filter_by_category(recent_papers, categories=config['arxiv']['categories'])
     print(f"Found {len(recent_papers)} papers in the specified categories")
     
-    # 4. Initial filtering using keyword matching
-    # Score papers using Gemini for relevance and significance
-    print("Scoring papers for relevance and significance using Gemini...")
-    scored_papers = gemini_client.batch_score_papers(
+    # 4. Score papers using LLM for relevance and significance
+    print("Scoring papers for relevance and significance using LLM...")
+    scored_papers = llm_client.batch_score_papers(
         recent_papers, 
         keywords=keywords,
         negative_keywords=exclude_keywords
     )
     
-    # 7. Select top papers based on combined score
+    # 5. Select top papers based on combined score
     print("Selecting top papers based on relevance and significance scores...")
     max_papers = config['report']['max_papers']
     selected_papers = paper_ranker.select_top_papers(scored_papers, limit=max_papers)
     print(f"Selected {len(selected_papers)} papers for the report")
     
-    # 7. Analyze papers using Gemini
-    print("Analyzing papers with Gemini...")
+    # 6. Analyze papers using LLM
+    print("Analyzing papers with LLM...")
     for i, paper in enumerate(selected_papers):
         print(f"Analyzing paper {i+1}/{len(selected_papers)}: {paper['title']}")
         
@@ -99,17 +105,17 @@ def main():
         
         if pdf_data:
             # Analyze using the full PDF
-            paper['analysis'] = gemini_client.analyze_paper_from_pdf(pdf_data, paper)
+            paper['analysis'] = llm_client.analyze_paper_from_pdf(pdf_data, paper)
         else:
             # Fall back to abstract-based analysis if PDF is too large (>20MB) or download fails
             print(f"Falling back to abstract-based analysis for {paper['title']}")
-            paper['analysis'] = gemini_client.analyze_paper_from_abstract(paper)
+            paper['analysis'] = llm_client.analyze_paper_from_abstract(paper)
     
-    # 8. Generate report summary
+    # 7. Generate report summary
     print("Generating report summary...")
-    report_summary = gemini_client.generate_report_summary(selected_papers, report_type="daily")
+    report_summary = llm_client.generate_report_summary(selected_papers, report_type="daily")
     
-    # 9. Generate Markdown report
+    # 8. Generate Markdown report
     print("Generating Markdown report...")
     markdown_report = markdown_generator.generate_daily_report(
         papers=selected_papers,
@@ -117,17 +123,17 @@ def main():
         date=report_date
     )
     
-    # 10. Save report
+    # 9. Save report
     report_filename = f"arxiv_cv_report_{report_date}.md"
     markdown_path = markdown_generator.save_report(markdown_report, filename=report_filename)
     
-    # 11. Convert to HTML if needed
+    # 10. Convert to HTML if needed
     html_path = None
     if 'html' in config['report']['output_format']:
         print("Converting report to HTML...")
         html_path = markdown_generator.convert_to_html(markdown_path)
     
-    # 12. Send email notification if enabled
+    # 11. Send email notification if enabled
     if not args.no_email and config['email']['enabled']:
         print("Sending email notification...")
         email_notifier.send_report_notification(
