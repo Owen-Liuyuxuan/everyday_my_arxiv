@@ -21,8 +21,8 @@
   },
   "llm": {
     "provider": "ark",
-    "text_model": "doubao-seed-1-6-flash-2508285",
-    "document_model": "doubao-seed-1-6-flash-250828",
+    "text_model": "deepseek-v3-2-251201",
+    "document_model": "doubao-seed-1-6-vision-250815",
     "base_url": "https://ark.cn-beijing.volces.com/api/v3",
     "temperature": 0.2,
     "max_output_tokens": 4096,

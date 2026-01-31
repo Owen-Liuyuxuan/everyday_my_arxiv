@@ -3,9 +3,8 @@ Volcengine Ark API client for paper analysis, summarization, and relevance scori
 
 Uses ByteDance's Doubao models via the Volcengine Ark platform.
 """
-import asyncio
+import base64
 import os
-import tempfile
 from typing import Dict, List, Optional
 
 from src.llm.base import BaseLLMClient
@@ -15,10 +14,8 @@ class ArkClient(BaseLLMClient):
     """
     LLM client using Volcengine's Ark API (ByteDance Doubao models).
     
-    Supports PDF analysis (via async file upload), abstract analysis, 
+    Supports PDF analysis (via base64 encoding), abstract analysis, 
     report summarization, translation, and paper relevance scoring.
-    
-    Note: PDF analysis uses async internally but exposes a sync interface.
     """
     
     def __init__(self, config_path: str = "config/config_ark.json"):
@@ -37,9 +34,8 @@ class ArkClient(BaseLLMClient):
         
         # Lazy import of Volcengine Ark SDK
         try:
-            from volcenginesdkarkruntime import Ark, AsyncArk
+            from volcenginesdkarkruntime import Ark
             self._Ark = Ark
-            self._AsyncArk = AsyncArk
         except ImportError as e:
             raise ImportError(
                 "Volcengine Ark SDK not installed. "
@@ -54,25 +50,12 @@ class ArkClient(BaseLLMClient):
         # Get base URL from config or use default
         self.base_url = self.config.get('base_url', 'https://ark.cn-beijing.volces.com/api/v3')
         
-        # Initialize sync client for text generation
+        # Initialize sync client
         self.client = self._Ark(base_url=self.base_url, api_key=api_key)
-        
-        # Store credentials for async client (created on demand)
-        self._api_key = api_key
-        self._async_client = None
         
         # Model configuration
         self.text_model = self.config.get('text_model', 'doubao-seed-1-6-251015')
         self.document_model = self.config.get('document_model', 'doubao-seed-1-6-251015')
-    
-    def _get_async_client(self):
-        """Get or create the async client (lazy initialization)."""
-        if self._async_client is None:
-            self._async_client = self._AsyncArk(
-                base_url=self.base_url,
-                api_key=self._api_key
-            )
-        return self._async_client
     
     def _call_text_api(self, prompt: str, temperature: Optional[float] = None,
                        max_tokens: Optional[int] = None) -> str:
@@ -92,6 +75,7 @@ class ArkClient(BaseLLMClient):
         kwargs = {
             "model": self.text_model,
             "messages": messages,
+            "thinking": {"type": "disabled"},  # Disable deep thinking for faster response
         }
         
         # Add optional parameters if specified
@@ -100,97 +84,74 @@ class ArkClient(BaseLLMClient):
         elif self.max_output_tokens:
             kwargs["max_tokens"] = self.max_output_tokens
         
-        # Note: Ark API may not support temperature in the same way as Gemini
-        # Check documentation for supported parameters
-        
         completion = self.client.chat.completions.create(**kwargs)
         return completion.choices[0].message.content
     
-    async def _analyze_pdf_async(self, pdf_data: bytes, paper_metadata: Dict,
-                                  prompt_type: str) -> str:
+    def _call_document_api(self, pdf_data: bytes, prompt: str,
+                           max_tokens: Optional[int] = None) -> str:
         """
-        Async implementation of PDF analysis.
-        
-        Workflow:
-        1. Write PDF bytes to temp file
-        2. Upload file to Ark
-        3. Wait for processing
-        4. Query with file_id
-        5. Cleanup
+        Make a synchronous document analysis API call using base64 encoding.
         
         Args:
             pdf_data: PDF content as bytes
-            paper_metadata: Paper metadata
-            prompt_type: Type of analysis
+            prompt: The prompt text
+            max_tokens: Override default max_output_tokens
             
         Returns:
-            Analysis result as text
+            Generated text response
         """
-        async_client = self._get_async_client()
-        temp_file_path = None
+        # Encode PDF to base64
+        base64_pdf = base64.b64encode(pdf_data).decode('utf-8')
         
-        try:
-            # Write PDF to temp file
-            with tempfile.NamedTemporaryFile(suffix='.pdf', delete=False) as tmp:
-                tmp.write(pdf_data)
-                temp_file_path = tmp.name
-            
-            # Upload file
-            with open(temp_file_path, 'rb') as f:
-                file = await async_client.files.create(
-                    file=f,
-                    purpose="user_data"
-                )
-            
-            # Wait for processing
-            await async_client.files.wait_for_processing(file.id)
-            
-            # Load prompt template
-            prompt_template = self._load_prompt_template(prompt_type)
-            prompt = prompt_template.format(
-                title=paper_metadata['title'],
-                authors=", ".join(paper_metadata['authors']),
-                abstract=paper_metadata['abstract'],
-                summary_length=self.summary_length
-            )
-            
-            # Query with file reference
-            response = await async_client.responses.create(
-                model=self.document_model,
-                input=[
-                    {"role": "user", "content": [
+        kwargs = {
+            "model": self.document_model,
+            "input": [
+                {
+                    "role": "user",
+                    "content": [
                         {
                             "type": "input_file",
-                            "file_id": file.id
+                            "file_data": f"data:application/pdf;base64,{base64_pdf}",
+                            "filename": "paper.pdf"
                         },
                         {
                             "type": "input_text",
                             "text": prompt
                         }
-                    ]},
-                ],
-            )
-            
-            # Extract text from response
-            # Response format may vary - handle appropriately
-            if hasattr(response, 'text'):
-                return response.text
-            elif hasattr(response, 'output'):
-                return str(response.output)
-            else:
-                return str(response)
-            
-        finally:
-            # Cleanup temp file
-            if temp_file_path and os.path.exists(temp_file_path):
-                os.unlink(temp_file_path)
+                    ]
+                }
+            ],
+            "thinking": {"type": "disabled"},  # Disable deep thinking for faster response
+            "max_output_tokens": self.max_output_tokens
+        }
+        
+        response = self.client.responses.create(**kwargs)
+        
+        # Extract text from response
+        # Response structure: response.output[0].content[0].text
+        # where output is a list of ResponseOutputMessage objects
+        if hasattr(response, 'output') and isinstance(response.output, list):
+            for item in response.output:
+                if hasattr(item, 'type') and item.type == 'message':
+                    if hasattr(item, 'content') and isinstance(item.content, list):
+                        for content_item in item.content:
+                            if hasattr(content_item, 'type') and content_item.type == 'output_text':
+                                if hasattr(content_item, 'text') and content_item.text:
+                                    return content_item.text
+        
+        # Fallback: try other common patterns
+        if hasattr(response, 'text') and response.text:
+            return response.text
+        
+        # Last resort: stringify the response
+        return str(response)
     
     def analyze_paper_from_pdf(self, pdf_data: bytes, paper_metadata: Dict, 
                                prompt_type: str = "summary") -> str:
         """
         Analyze a paper using its PDF content and metadata.
         
-        Uses async file upload internally but provides sync interface.
+        Uses base64 encoding for synchronous PDF analysis.
         
         Args:
             pdf_data: PDF content as bytes
@@ -201,10 +162,17 @@ class ArkClient(BaseLLMClient):
             Analysis result as text
         """
         try:
-            # Run async function synchronously
-            return asyncio.run(
-                self._analyze_pdf_async(pdf_data, paper_metadata, prompt_type)
+            # Load prompt template
+            prompt_template = self._load_prompt_template(prompt_type)
+            prompt = prompt_template.format(
+                title=paper_metadata['title'],
+                authors=", ".join(paper_metadata['authors']),
+                abstract=paper_metadata['abstract'],
+                summary_length=self.summary_length
             )
+            
+            return self._call_document_api(pdf_data, prompt)
+            
         except Exception as e:
             print(f"Error analyzing PDF with Ark: {e}")
             # Fall back to abstract analysis
@@ -320,4 +288,3 @@ class ArkClient(BaseLLMClient):
         
         response_text = self._call_text_api(prompt, max_tokens=1024)
         return self._parse_json_response(response_text)
-
