@@ -57,8 +57,7 @@ def main():
     arxiv_parser = ArxivParser(keywords_path=args.keywords)
     
     # Create LLM client using factory (auto-detects provider from config path)
-    llm_client = create_llm_client(config_path=args.config, provider=args.provider)
-    provider_name = config.get('llm', {}).get('provider', 'gemini')
+    llm_client, provider_name = create_llm_client(config_path=args.config, provider=args.provider)
     print(f"Using LLM provider: {provider_name}")
     
     markdown_generator = MarkdownReportGenerator(config_path=args.config)

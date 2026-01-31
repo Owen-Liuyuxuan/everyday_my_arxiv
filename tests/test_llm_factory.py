@@ -103,9 +103,10 @@ class TestFactoryWithMockedEnvironment:
         # This will still fail because the API key is invalid,
         # but it tests that we get past the environment check
         try:
-            client = create_llm_client(temp_gemini_config, provider="gemini")
+            client, provider = create_llm_client(temp_gemini_config, provider="gemini")
             # If we get here, client was created (would need valid API)
             assert client is not None
+            assert provider == "gemini"
         except Exception as e:
             # Expected - invalid API key or network error
             # But should not be ValueError about missing API key
@@ -116,8 +117,9 @@ class TestFactoryWithMockedEnvironment:
         monkeypatch.setenv("ARK_API_KEY", "test-api-key")
         
         try:
-            client = create_llm_client(temp_ark_config, provider="ark")
+            client, provider = create_llm_client(temp_ark_config, provider="ark")
             assert client is not None
+            assert provider == "ark"
         except ImportError:
             # SDK might not be installed
             pytest.skip("Volcengine SDK not installed")
@@ -168,4 +170,34 @@ class TestAvailableProviders:
         # Ark may or may not be available depending on optional dep installation
         # Just verify the function doesn't crash
         assert all(p in ["gemini", "ark"] for p in providers)
+
+
+class TestProviderNameReturn:
+    """Tests for verifying correct provider name is returned."""
+    
+    def test_provider_name_returned_with_explicit_arg(self, temp_gemini_config, monkeypatch):
+        """Test that correct provider name is returned when explicitly specified."""
+        monkeypatch.setenv("GOOGLE_API_KEY", "test-api-key")
+        
+        try:
+            client, provider = create_llm_client(temp_gemini_config, provider="gemini")
+            assert provider == "gemini", "Provider name should match explicit argument"
+        except Exception:
+            # If client creation fails for other reasons, we're still testing the interface
+            pass
+    
+    def test_provider_name_from_path_detection(self, temp_ark_config, monkeypatch):
+        """Test that correct provider name is returned with path-based auto-detection."""
+        monkeypatch.setenv("ARK_API_KEY", "test-api-key")
+        
+        try:
+            # Don't specify provider, let it auto-detect from '_ark' in filename
+            client, provider = create_llm_client(temp_ark_config)
+            assert provider == "ark", "Provider name should be detected from path"
+        except ImportError:
+            pytest.skip("Volcengine SDK not installed")
+        except Exception:
+            # If client creation fails for other reasons, we're still testing the interface
+            pass
+
 

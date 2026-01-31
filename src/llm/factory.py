@@ -12,7 +12,7 @@ if TYPE_CHECKING:
 
 
 def create_llm_client(config_path: str = "config/config.json", 
-                      provider: str = None) -> "BaseLLMClient":
+                      provider: str = None) -> tuple["BaseLLMClient", str]:
     """
     Factory function to create an LLM client with lazy imports.
     
@@ -27,7 +27,9 @@ def create_llm_client(config_path: str = "config/config.json",
                   If None, auto-detects from config_path.
     
     Returns:
-        An instance of BaseLLMClient (either GeminiClient or ArkClient)
+        A tuple of (client_instance, provider_name) where:
+        - client_instance: An instance of BaseLLMClient (either GeminiClient or ArkClient)
+        - provider_name: The actual provider being used (e.g., 'gemini', 'ark')
     
     Raises:
         ValueError: If provider is unknown
@@ -35,11 +37,11 @@ def create_llm_client(config_path: str = "config/config.json",
     
     Example:
         # Auto-detect from config path
-        client = create_llm_client("config/config.json")      # -> GeminiClient
-        client = create_llm_client("config/config_ark.json")  # -> ArkClient
+        client, provider = create_llm_client("config/config.json")      # -> (GeminiClient, 'gemini')
+        client, provider = create_llm_client("config/config_ark.json")  # -> (ArkClient, 'ark')
         
         # Explicit provider
-        client = create_llm_client("config/custom.json", provider="ark")
+        client, provider = create_llm_client("config/custom.json", provider="ark")  # -> (ArkClient, 'ark')
     """
     # Determine provider
     if provider is None:
@@ -57,7 +59,7 @@ def create_llm_client(config_path: str = "config/config.json",
     if provider == "gemini":
         try:
             from src.llm.gemini import GeminiClient
-            return GeminiClient(config_path)
+            return GeminiClient(config_path), "gemini"
         except ImportError as e:
             raise ImportError(
                 "Google GenAI SDK not installed. "
@@ -67,7 +69,7 @@ def create_llm_client(config_path: str = "config/config.json",
     elif provider == "ark":
         try:
             from src.llm.ark import ArkClient
-            return ArkClient(config_path)
+            return ArkClient(config_path), "ark"
         except ImportError as e:
             raise ImportError(
                 "Volcengine Ark SDK not installed. "
