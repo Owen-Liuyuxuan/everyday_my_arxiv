@@ -122,8 +122,13 @@ class ArkClient(BaseLLMClient):
                 }
             ],
             "thinking": {"type": "disabled"},  # Disable deep thinking for faster response
-            "max_output_tokens": self.max_output_tokens
         }
+        
+        # Set max_output_tokens with override support (consistent with _call_text_api)
+        if max_tokens is not None:
+            kwargs["max_output_tokens"] = max_tokens
+        elif self.max_output_tokens:
+            kwargs["max_output_tokens"] = self.max_output_tokens
         
         response = self.client.responses.create(**kwargs)
         
