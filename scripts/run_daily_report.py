@@ -89,7 +89,9 @@ def main():
 
     # --- STAGE: SCORE ---
     if args.stage == "score" or args.stage == "all":
-        if args.input_file:
+        # Only load input file if we are running the 'score' stage standalone.
+        # If running 'all', use the results from the previous 'fetch' stage in memory.
+        if args.input_file and args.stage == "score":
             with open(args.input_file, 'r') as f:
                 papers = json.load(f)
         
@@ -108,7 +110,8 @@ def main():
 
     # --- STAGE: ANALYZE ---
     if args.stage == "analyze" or args.stage == "all":
-        if args.input_file:
+        # Only load input file if we are running the 'analyze' stage standalone.
+        if args.input_file and args.stage == "analyze":
             with open(args.input_file, 'r') as f:
                 papers = json.load(f)
         
@@ -138,7 +141,8 @@ def main():
 
     # --- STAGE: REPORT ---
     if args.stage == "report" or args.stage == "all":
-        if args.input_file:
+        # Only load input file if we are running the 'report' stage standalone.
+        if args.input_file and args.stage == "report":
             with open(args.input_file, 'r') as f:
                 papers = json.load(f)
         
