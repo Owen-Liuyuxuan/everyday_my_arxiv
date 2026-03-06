@@ -23,6 +23,32 @@ from src.utils.citation import CitationAnalyzer
 from src.utils.filters import PaperFilter
 from src.utils.ranking import PaperRanker
 
+class PaperEncoder(json.JSONEncoder):
+    """Custom JSON encoder to handle datetime objects in paper metadata."""
+    def default(self, obj):
+        if isinstance(obj, (datetime.datetime, datetime.date)):
+            return obj.isoformat()
+        return super().default(obj)
+
+def load_papers(file_path: str) -> List[Dict]:
+    """Load papers from a JSON file, converting ISO strings back to datetime objects."""
+    with open(file_path, 'r') as f:
+        papers = json.load(f)
+    
+    for paper in papers:
+        for key in ['published_datetime', 'updated_datetime']:
+            if key in paper and isinstance(paper[key], str):
+                try:
+                    paper[key] = datetime.datetime.fromisoformat(paper[key])
+                except ValueError:
+                    pass
+    return papers
+
+def save_papers(papers: List[Dict], file_path: str):
+    """Save papers to a JSON file using the custom PaperEncoder."""
+    with open(file_path, 'w') as f:
+        json.dump(papers, f, indent=2, cls=PaperEncoder)
+
 def main():
     """Run the daily Arxiv paper report with enhanced AI-based paper selection."""
     parser = argparse.ArgumentParser(description="Generate daily Arxiv paper report")
@@ -82,18 +108,15 @@ def main():
         papers = recent_papers
         
         if args.output_file:
-            with open(args.output_file, 'w') as f:
-                json.dump(papers, f, indent=2)
+            save_papers(papers, args.output_file)
             print(f"Fetch stage completed. Output saved to {args.output_file}")
             if args.stage == "fetch": return
 
     # --- STAGE: SCORE ---
     if args.stage == "score" or args.stage == "all":
         # Only load input file if we are running the 'score' stage standalone.
-        # If running 'all', use the results from the previous 'fetch' stage in memory.
         if args.input_file and args.stage == "score":
-            with open(args.input_file, 'r') as f:
-                papers = json.load(f)
+            papers = load_papers(args.input_file)
         
         if llm_client:
             print("Scoring papers for relevance and significance using LLM...")
@@ -106,8 +129,7 @@ def main():
             print("Skipping scoring stage: LLM client not initialized.")
         
         if args.output_file:
-            with open(args.output_file, 'w') as f:
-                json.dump(papers, f, indent=2)
+            save_papers(papers, args.output_file)
             print(f"Score stage completed. Output saved to {args.output_file}")
             if args.stage == "score": return
 
@@ -115,8 +137,7 @@ def main():
     if args.stage == "analyze" or args.stage == "all":
         # Only load input file if we are running the 'analyze' stage standalone.
         if args.input_file and args.stage == "analyze":
-            with open(args.input_file, 'r') as f:
-                papers = json.load(f)
+            papers = load_papers(args.input_file)
         
         print("Selecting top papers based on relevance and significance scores...")
         max_papers = config['report']['max_papers']
@@ -140,8 +161,7 @@ def main():
         
         papers = selected_papers
         if args.output_file:
-            with open(args.output_file, 'w') as f:
-                json.dump(papers, f, indent=2)
+            save_papers(papers, args.output_file)
             print(f"Analyze stage completed. Output saved to {args.output_file}")
             if args.stage == "analyze": return
 
@@ -149,8 +169,7 @@ def main():
     if args.stage == "report" or args.stage == "all":
         # Only load input file if we are running the 'report' stage standalone.
         if args.input_file and args.stage == "report":
-            with open(args.input_file, 'r') as f:
-                papers = json.load(f)
+            papers = load_papers(args.input_file)
         
         report_summary = ""
         if llm_client:
