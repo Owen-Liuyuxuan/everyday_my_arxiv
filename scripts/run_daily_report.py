@@ -95,12 +95,15 @@ def main():
             with open(args.input_file, 'r') as f:
                 papers = json.load(f)
         
-        print("Scoring papers for relevance and significance using LLM...")
-        papers = llm_client.batch_score_papers(
-            papers, 
-            keywords=keywords,
-            negative_keywords=exclude_keywords
-        )
+        if llm_client:
+            print("Scoring papers for relevance and significance using LLM...")
+            papers = llm_client.batch_score_papers(
+                papers, 
+                keywords=keywords,
+                negative_keywords=exclude_keywords
+            )
+        else:
+            print("Skipping scoring stage: LLM client not initialized.")
         
         if args.output_file:
             with open(args.output_file, 'w') as f:
@@ -120,17 +123,20 @@ def main():
         selected_papers = paper_ranker.select_top_papers(papers, limit=max_papers)
         print(f"Selected {len(selected_papers)} papers for analysis")
         
-        print("Analyzing papers with LLM...")
-        for i, paper in enumerate(selected_papers):
-            print(f"Analyzing paper {i+1}/{len(selected_papers)}: {paper['title']}")
-            paper = arxiv_parser.enrich_paper_data(paper)
-            pdf_data = arxiv_client.get_pdf_content(paper['pdf_url'])
-            
-            if pdf_data:
-                paper['analysis'] = llm_client.analyze_paper_from_pdf(pdf_data, paper)
-            else:
-                print(f"Falling back to abstract-based analysis for {paper['title']}")
-                paper['analysis'] = llm_client.analyze_paper_from_abstract(paper)
+        if llm_client:
+            print("Analyzing papers with LLM...")
+            for i, paper in enumerate(selected_papers):
+                print(f"Analyzing paper {i+1}/{len(selected_papers)}: {paper['title']}")
+                paper = arxiv_parser.enrich_paper_data(paper)
+                pdf_data = arxiv_client.get_pdf_content(paper['pdf_url'])
+                
+                if pdf_data:
+                    paper['analysis'] = llm_client.analyze_paper_from_pdf(pdf_data, paper)
+                else:
+                    print(f"Falling back to abstract-based analysis for {paper['title']}")
+                    paper['analysis'] = llm_client.analyze_paper_from_abstract(paper)
+        else:
+            print("Skipping analysis stage: LLM client not initialized.")
         
         papers = selected_papers
         if args.output_file:
@@ -146,8 +152,12 @@ def main():
             with open(args.input_file, 'r') as f:
                 papers = json.load(f)
         
-        print("Generating report summary...")
-        report_summary = llm_client.generate_report_summary(papers, report_type="daily")
+        report_summary = ""
+        if llm_client:
+            print("Generating report summary...")
+            report_summary = llm_client.generate_report_summary(papers, report_type="daily")
+        else:
+            print("Warning: Skipping report summary generation as LLM client is not initialized.")
         
         print("Generating Markdown report...")
         markdown_report = markdown_generator.generate_daily_report(
