@@ -131,48 +131,52 @@ class BaseLLMClient(ABC):
     
     @abstractmethod
     def _score_single_paper(self, paper: Dict, keywords: List[str],
-                            negative_keywords: Optional[List[str]] = None) -> Dict:
+                            negative_keywords: Optional[List[str]] = None,
+                            author_preferences: Optional[Dict] = None) -> Dict:
         """
         Score a single paper's relevance and significance.
-        
+
         This is the provider-specific implementation called by batch_score_papers.
-        
+
         Args:
             paper: Paper object with title, authors, abstract, etc.
             keywords: List of keywords of interest
             negative_keywords: List of keywords to avoid (optional)
-            
+            author_preferences: Dict of preferred authors/institutions (optional)
+
         Returns:
             Dictionary with relevance_score, significance_score, and combined_score
         """
         pass
-    
+
     def batch_score_papers(self, papers: List[Dict], keywords: List[str],
-                          negative_keywords: Optional[List[str]] = None) -> List[Dict]:
+                          negative_keywords: Optional[List[str]] = None,
+                          author_preferences: Optional[Dict] = None) -> List[Dict]:
         """
         Score multiple papers in batches for efficiency.
-        
+
         This is the public API that uses _score_single_paper internally.
-        
+
         Args:
             papers: List of paper objects
             keywords: List of keywords of interest
             negative_keywords: List of keywords to avoid (optional)
-            
+            author_preferences: Dict of preferred authors/institutions (optional)
+
         Returns:
             List of papers with added relevance and significance scores
         """
         scored_papers = []
-        
+
         # Process papers in batches
         for i in range(0, len(papers), self.batch_size):
             batch = papers[i:i + self.batch_size]
             print(f"Scoring batch {i//self.batch_size + 1}/{(len(papers)-1)//self.batch_size + 1} " +
                   f"({len(batch)} papers)")
-            
+
             # Process each paper in the batch
             for paper in batch:
-                scores = self._score_single_paper(paper, keywords, negative_keywords)
+                scores = self._score_single_paper(paper, keywords, negative_keywords, author_preferences)
                 
                 # Add scores to the paper object
                 paper['relevance_score'] = scores.get('relevance_score', 1)

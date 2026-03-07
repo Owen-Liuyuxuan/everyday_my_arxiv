@@ -20,11 +20,16 @@
     "include_summary": true
   },
   "llm": {
-    "model": "gemini-2.5-flash-lite",
+    "provider": "gemini",
+    "model": "gemini-2.5-flash",
     "temperature": 0.2,
     "max_output_tokens": 8192,
     "summary_length": "medium",
-    "batch_size": 16
+    "batch_size": 16,
+    "pdf_provider": "gemini",
+    "pdf_model": "gemini-2.5-flash",
+    "scoring_provider": "gemini",
+    "scoring_model": "gemini-2.5-flash"
   },
   "ranking": {
     "min_combined_score": 4,

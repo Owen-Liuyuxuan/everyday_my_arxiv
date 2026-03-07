@@ -2,7 +2,7 @@
 """
 Main script to run the daily Arxiv paper report with enhanced paper selection using
 LLM (Gemini or Ark) to determine relevance and significance.
-Modified to support granular stage execution for OpenClaw Agent migration.
+Modified to support granular stage execution and flexible LLM model selection.
 """
 import argparse
 import datetime
@@ -16,7 +16,7 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from src.arxiv.client import ArxivClient
 from src.arxiv.parser import ArxivParser
-from src.llm.factory import create_llm_client
+from src.llm.factory import create_scoring_client, create_pdf_client
 from src.output.markdown import MarkdownReportGenerator
 from src.output.email import EmailNotifier
 from src.utils.citation import CitationAnalyzer
@@ -57,7 +57,7 @@ def main():
     parser.add_argument("--date", help="Report date (YYYY-MM-DD), defaults to today")
     parser.add_argument("--no-email", action="store_true", help="Disable email notification")
     parser.add_argument("--skip-scoring", action="store_true", help="Skip AI-based paper scoring")
-    parser.add_argument("--provider", choices=["gemini", "ark"], default=None,
+    parser.add_argument("--provider", choices=["gemini", "ark", "openai"], default=None,
                         help="LLM provider to use (auto-detected from config path if not specified)")
     parser.add_argument("--stage", choices=["fetch", "score", "analyze", "report", "all"], default="all",
                         help="Granular stage to execute (for agentic migration)")
@@ -89,10 +89,16 @@ def main():
     paper_filter = PaperFilter()
     paper_ranker = PaperRanker(min_combined_score=config.get('ranking', {}).get('min_combined_score', 4))
 
-    llm_client = None
+    # Create separate LLM clients for scoring and PDF analysis
+    # scoring_client: text-only, cheaper models (DeepSeek, etc.)
+    # pdf_client: multimodal, for PDF analysis (Gemini, Ark with vision)
+    scoring_client = None
+    pdf_client = None
     if args.stage in ["score", "analyze", "report", "all"]:
-        llm_client, provider_name = create_llm_client(config_path=args.config, provider=args.provider)
-        print(f"Using LLM provider: {provider_name}")
+        scoring_client = create_scoring_client(config_path=args.config)
+        pdf_client = create_pdf_client(config_path=args.config)
+        print(f"Using scoring provider: {scoring_client.__class__.__name__}")
+        print(f"Using PDF provider: {pdf_client.__class__.__name__}")
 
     papers = []
 
@@ -118,15 +124,15 @@ def main():
         if args.input_file and args.stage == "score":
             papers = load_papers(args.input_file)
         
-        if llm_client:
+        if scoring_client:
             print("Scoring papers for relevance and significance using LLM...")
-            papers = llm_client.batch_score_papers(
+            papers = scoring_client.batch_score_papers(
                 papers, 
                 keywords=keywords,
                 negative_keywords=exclude_keywords
             )
         else:
-            print("Skipping scoring stage: LLM client not initialized.")
+            print("Skipping scoring stage: scoring_client not initialized.")
         
         if args.output_file:
             save_papers(papers, args.output_file)
@@ -144,7 +150,7 @@ def main():
         selected_papers = paper_ranker.select_top_papers(papers, limit=max_papers)
         print(f"Selected {len(selected_papers)} papers for analysis")
         
-        if llm_client:
+        if pdf_client:
             print("Analyzing papers with LLM...")
             for i, paper in enumerate(selected_papers):
                 print(f"Analyzing paper {i+1}/{len(selected_papers)}: {paper['title']}")
@@ -152,12 +158,13 @@ def main():
                 pdf_data = arxiv_client.get_pdf_content(paper['pdf_url'])
                 
                 if pdf_data:
-                    paper['analysis'] = llm_client.analyze_paper_from_pdf(pdf_data, paper)
+                    # Use multimodal PDF client for analysis
+                    paper['analysis'] = pdf_client.analyze_paper_from_pdf(pdf_data, paper)
                 else:
                     print(f"Falling back to abstract-based analysis for {paper['title']}")
-                    paper['analysis'] = llm_client.analyze_paper_from_abstract(paper)
+                    paper['analysis'] = pdf_client.analyze_paper_from_abstract(paper)
         else:
-            print("Skipping analysis stage: LLM client not initialized.")
+            print("Skipping analysis stage: pdf_client not initialized.")
         
         papers = selected_papers
         if args.output_file:
@@ -172,11 +179,11 @@ def main():
             papers = load_papers(args.input_file)
         
         report_summary = ""
-        if llm_client:
+        if scoring_client:
             print("Generating report summary...")
-            report_summary = llm_client.generate_report_summary(papers, report_type="daily")
+            report_summary = scoring_client.generate_report_summary(papers, report_type="daily")
         else:
-            print("Warning: Skipping report summary generation as LLM client is not initialized.")
+            print("Warning: Skipping report summary generation as scoring_client is not initialized.")
         
         print("Generating Markdown report...")
         markdown_report = markdown_generator.generate_daily_report(

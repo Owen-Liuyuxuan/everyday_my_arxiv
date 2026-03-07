@@ -1,5 +1,14 @@
 """
-Google Gemini API client for paper analysis, summarization, and relevance scoring.
+OpenAI-compatible API client for paper analysis and relevance scoring.
+
+Supports any OpenAI-compatible API endpoint including:
+- OpenAI models (GPT-4, GPT-4o, etc.)
+- DeepSeek models
+- Local models via Ollama, LM Studio, etc.
+- Other OpenAI-compatible providers (Anthropic via compatible endpoints, etc.)
+
+Note: PDF analysis is NOT supported by this client as it requires multimodal capabilities.
+Use a separate multimodal client (GeminiClient or ArkClient) for PDF analysis.
 """
 import os
 from typing import Dict, List, Optional
@@ -7,114 +16,126 @@ from typing import Dict, List, Optional
 from src.llm.base import BaseLLMClient
 
 
-class GeminiClient(BaseLLMClient):
+class OpenAIClient(BaseLLMClient):
     """
-    LLM client using Google's Gemini API.
+    LLM client using OpenAI-compatible API.
     
-    Supports PDF analysis, abstract analysis, report summarization,
-    translation, and paper relevance scoring.
+    Supports text-based operations:
+    - Abstract analysis
+    - Paper relevance scoring
+    - Report summarization
+    - Translation
+    
+    PDF analysis is NOT supported - use a separate multimodal client.
     """
     
     def __init__(self, config_path: str = "config/config.json"):
         """
-        Initialize the Gemini client with configuration.
+        Initialize the OpenAI-compatible client with configuration.
         
         Args:
             config_path: Path to configuration file
             
         Raises:
-            ValueError: If GOOGLE_API_KEY environment variable is not set
-            ImportError: If google-genai package is not installed
+            ValueError: If OPENAI_API_KEY environment variable is not set
+            ImportError: If openai package is not installed
         """
         # Initialize base class (loads config, sets common attributes)
         super().__init__(config_path)
         
-        # Lazy import of Google GenAI SDK
+        # Lazy import of OpenAI SDK
         try:
-            from google import genai
-            from google.genai import types
-            self._genai = genai
-            self._types = types
+            from openai import OpenAI
+            self._OpenAI = OpenAI
         except ImportError as e:
             raise ImportError(
-                "Google GenAI SDK not installed. "
-                "Install with: pip install google-genai"
+                "OpenAI SDK not installed. "
+                "Install with: pip install openai"
             ) from e
         
-        # Initialize the Google Generative AI client
-        api_key = os.environ.get("GOOGLE_API_KEY")
+        # Get API key from environment or config
+        api_key = os.environ.get("OPENAI_API_KEY")
         if not api_key:
-            raise ValueError("GOOGLE_API_KEY environment variable is not set")
+            # Try to get from config
+            api_key = self.config.get('api_key')
         
-        self.client = self._genai.Client(api_key=api_key)
-        self.model_name = self.config['model']
-        # Note: temperature, max_output_tokens, summary_length, batch_size 
-        # are already set by BaseLLMClient.__init__()
+        if not api_key:
+            raise ValueError(
+                "OPENAI_API_KEY environment variable is not set, "
+                "or 'api_key' not found in config"
+            )
+        
+        # Get base URL from config (for OpenAI-compatible endpoints)
+        base_url = self.config.get('base_url', 'https://api.openai.com/v1')
+        
+        # Initialize the OpenAI client
+        self.client = self._OpenAI(
+            api_key=api_key,
+            base_url=base_url
+        )
+        
+        # Model configuration
+        self.model_name = self.config.get('model', 'gpt-4o-mini')
     
-    def _create_generation_config(self, temperature: Optional[float] = None,
-                                   max_tokens: Optional[int] = None):
+    def _call_api(self, prompt: str, temperature: Optional[float] = None,
+                  max_tokens: Optional[int] = None) -> str:
         """
-        Create a generation config for Gemini API calls.
+        Make a synchronous text generation API call.
         
         Args:
+            prompt: The prompt text
             temperature: Override default temperature
             max_tokens: Override default max_output_tokens
             
         Returns:
-            GenerateContentConfig instance
+            Generated text response
         """
-        return self._types.GenerateContentConfig(
-            temperature=temperature or self.temperature,
-            max_output_tokens=max_tokens or self.max_output_tokens,
-            thinking_config=self._types.ThinkingConfig(thinking_budget=0)
-        )
+        kwargs = {
+            "model": self.model_name,
+            "messages": [{"role": "user", "content": prompt}],
+        }
+        
+        if temperature is not None:
+            kwargs["temperature"] = temperature
+        elif self.temperature:
+            kwargs["temperature"] = self.temperature
+        
+        if max_tokens is not None:
+            kwargs["max_tokens"] = max_tokens
+        elif self.max_output_tokens:
+            kwargs["max_tokens"] = self.max_output_tokens
+        
+        completion = self.client.chat.completions.create(**kwargs)
+        return completion.choices[0].message.content
     
-    def analyze_paper_from_pdf(self, pdf_data: bytes, paper_metadata: Dict, 
+    def analyze_paper_from_pdf(self, pdf_data: bytes, paper_metadata: Dict,
                                prompt_type: str = "summary") -> str:
         """
         Analyze a paper using its PDF content and metadata.
         
+        NOTE: OpenAI-compatible clients typically don't support PDF analysis.
+        This method will raise a NotImplementedError.
+        
+        Use a separate multimodal client (GeminiClient or ArkClient) for PDF analysis.
+        
         Args:
-            pdf_data: PDF content as bytes
+            pdf_data: PDF content as bytes (ignored)
             paper_metadata: Paper metadata (title, authors, etc.)
-            prompt_type: Type of analysis to perform (summary, review, etc.)
+            prompt_type: Type of analysis to perform
             
         Returns:
             Analysis result as text
+            
+        Raises:
+            NotImplementedError: PDF analysis not supported by OpenAI-compatible client
         """
-        # Load the appropriate prompt template
-        prompt_template = self._load_prompt_template(prompt_type)
-        
-        # # Format the prompt with paper metadata
-        # prompt = prompt_template.format(
-        #     title=paper_metadata['title'],
-        #     authors=", ".join(paper_metadata['authors']),
-        #     abstract=paper_metadata['abstract'],
-        #     summary_length=self.summary_length
-        # )
-        
-        ## Updated to directly use the prompt template without wrapping in Part
-        prompt = prompt_template 
-        
-        # Create generation config
-        generation_config = self._create_generation_config()
-        
-        # Call the Gemini API with the PDF content
-        response = self.client.models.generate_content(
-            model=self.model_name,
-            contents=[
-                self._types.Part.from_bytes(
-                    data=pdf_data,
-                    mime_type='application/pdf',
-                ),
-                prompt
-            ],
-            config=generation_config
+        raise NotImplementedError(
+            "PDF analysis is not supported by OpenAI-compatible client. "
+            "Use GeminiClient or ArkClient for PDF analysis, or configure "
+            "separate pdf_provider in your config."
         )
-        
-        return response.text
     
-    def analyze_paper_from_abstract(self, paper: Dict, 
+    def analyze_paper_from_abstract(self, paper: Dict,
                                     prompt_type: str = "abstract_analysis") -> str:
         """
         Analyze a paper using only its abstract and metadata.
@@ -138,19 +159,9 @@ class GeminiClient(BaseLLMClient):
             published_date=paper['published_date']
         )
         
-        # Create generation config
-        generation_config = self._create_generation_config()
-        
-        # Call the Gemini API
-        response = self.client.models.generate_content(
-            model=self.model_name,
-            contents=prompt,
-            config=generation_config
-        )
-        
-        return response.text
+        return self._call_api(prompt)
     
-    def generate_report_summary(self, papers: List[Dict], 
+    def generate_report_summary(self, papers: List[Dict],
                                 report_type: str = "daily") -> str:
         """
         Generate a summary of multiple papers for the report.
@@ -180,17 +191,7 @@ class GeminiClient(BaseLLMClient):
             date=papers[0]['published_date'] if papers else "today"
         )
         
-        # Create generation config
-        generation_config = self._create_generation_config()
-        
-        # Call the Gemini API
-        response = self.client.models.generate_content(
-            model=self.model_name,
-            contents=prompt,
-            config=generation_config
-        )
-        
-        return response.text
+        return self._call_api(prompt)
     
     def translate_content(self, content: str, target_language: str) -> str:
         """
@@ -212,23 +213,14 @@ class GeminiClient(BaseLLMClient):
             target_language=target_language
         )
         
-        # Create generation config with lower temperature for translation
-        generation_config = self._create_generation_config(temperature=0.1)
-        
-        # Call the Gemini API
-        response = self.client.models.generate_content(
-            model=self.model_name,
-            contents=prompt,
-            config=generation_config
-        )
-        
-        return response.text
+        # Use lower temperature for translation
+        return self._call_api(prompt, temperature=0.1)
     
     def _score_single_paper(self, paper: Dict, keywords: List[str],
                             negative_keywords: Optional[List[str]] = None,
                             author_preferences: Optional[Dict] = None) -> Dict:
         """
-        Score a single paper's relevance and significance using Gemini.
+        Score a single paper's relevance and significance using OpenAI-compatible API.
 
         Args:
             paper: Paper object with title, authors, abstract, etc.
@@ -256,20 +248,8 @@ class GeminiClient(BaseLLMClient):
             author_preferences=self._format_author_preferences(author_preferences)
         )
 
-        # Create generation config with lower temperature for more consistent scoring
-        generation_config = self._create_generation_config(
-            temperature=0.05,  # Very low for stable evaluation
-            max_tokens=1024
-        )
-
-        # Call the Gemini API
-        response = self.client.models.generate_content(
-            model=self.model_name,
-            contents=prompt,
-            config=generation_config
-        )
-
-        return self._parse_json_response(response.text)
+        response_text = self._call_api(prompt, temperature=0.05, max_tokens=1024)
+        return self._parse_json_response(response_text)
 
     def _format_author_preferences(self, author_preferences: Optional[Dict]) -> str:
         """Format author preferences for the prompt."""
@@ -281,14 +261,3 @@ class GeminiClient(BaseLLMClient):
             if values:
                 formatted.append(f"{category}: {', '.join(values)}")
         return "; ".join(formatted) if formatted else "No specific author preferences"
-    
-    # Backward compatibility alias
-    def score_paper_relevance(self, paper: Dict, keywords: List[str],
-                              negative_keywords: Optional[List[str]] = None,
-                              author_preferences: Optional[Dict] = None) -> Dict:
-        """
-        Alias for _score_single_paper for backward compatibility.
-
-        Deprecated: Use batch_score_papers() instead.
-        """
-        return self._score_single_paper(paper, keywords, negative_keywords, author_preferences)

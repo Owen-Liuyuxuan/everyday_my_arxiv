@@ -135,7 +135,7 @@ class TestGeminiClientWithMockedAPI:
         mock_response.text = '{"relevance_score": 3, "significance_score": 2, "combined_score": 5}'
         mock_genai.Client.return_value.models.generate_content.return_value = mock_response
         
-        with patch.object(client, '_load_prompt_template', return_value="Score paper {title} {authors} {abstract} {categories} {published_date} {keywords} {negative_keywords}"):
+        with patch.object(client, '_load_prompt_template', return_value="Score paper {title} {authors} {abstract} {categories} {published_date} {venue} {code_url} {keywords} {negative_keywords} {author_preferences}"):
             result = client._score_single_paper(mock_paper, ["computer vision"])
             
             assert result["relevance_score"] == 3
@@ -162,6 +162,6 @@ class TestGeminiClientBackwardCompatibility:
             
             result = client.score_paper_relevance(paper, keywords)
             
-            client._score_single_paper.assert_called_once_with(paper, keywords, None)
+            client._score_single_paper.assert_called_once_with(paper, keywords, None, None)
             assert result["relevance_score"] == 2
 
