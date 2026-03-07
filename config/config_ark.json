@@ -27,7 +27,11 @@
     "temperature": 0.2,
     "max_output_tokens": 4096,
     "summary_length": "medium",
-    "batch_size": 16
+    "batch_size": 16,
+    "pdf_provider": "ark",
+    "pdf_model": "doubao-seed-1-6-vision-250815",
+    "scoring_provider": "ark",
+    "scoring_model": "deepseek-v3-2-251201"
   },
   "ranking": {
     "min_combined_score": 4,

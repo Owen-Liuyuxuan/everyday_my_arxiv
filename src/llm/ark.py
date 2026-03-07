@@ -265,31 +265,47 @@ class ArkClient(BaseLLMClient):
         return self._call_text_api(prompt)
     
     def _score_single_paper(self, paper: Dict, keywords: List[str],
-                            negative_keywords: Optional[List[str]] = None) -> Dict:
+                            negative_keywords: Optional[List[str]] = None,
+                            author_preferences: Optional[Dict] = None) -> Dict:
         """
         Score a single paper's relevance and significance using Ark.
-        
+
         Args:
             paper: Paper object with title, authors, abstract, etc.
             keywords: List of keywords of interest
             negative_keywords: List of keywords to avoid (optional)
-            
+            author_preferences: Dict of preferred authors/institutions (optional)
+
         Returns:
             Dictionary with relevance_score, significance_score, and combined_score
         """
         # Load the relevance scoring prompt template
         prompt_template = self._load_prompt_template("relevance_scoring")
-        
+
         # Format the prompt with paper metadata and user preferences
         prompt = prompt_template.format(
             title=paper['title'],
             authors=", ".join(paper['authors']),
             abstract=paper['abstract'],
-            categories=", ".join(paper['categories']),
-            published_date=paper['published_date'],
+            categories=", ".join(paper.get('categories', [])),
+            published_date=paper.get('published_date', 'N/A'),
+            venue=paper.get('venue', 'N/A'),
+            code_url=paper.get('code_url', 'N/A'),
             keywords=", ".join(keywords),
-            negative_keywords=", ".join(negative_keywords or [])
+            negative_keywords=", ".join(negative_keywords or []),
+            author_preferences=self._format_author_preferences(author_preferences)
         )
-        
+
         response_text = self._call_text_api(prompt, max_tokens=1024)
         return self._parse_json_response(response_text)
+
+    def _format_author_preferences(self, author_preferences: Optional[Dict]) -> str:
+        """Format author preferences for the prompt."""
+        if not author_preferences:
+            return "No specific author preferences"
+
+        formatted = []
+        for category, values in author_preferences.items():
+            if values:
+                formatted.append(f"{category}: {', '.join(values)}")
+        return "; ".join(formatted) if formatted else "No specific author preferences"

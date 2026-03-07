@@ -3,10 +3,10 @@ Script to record the current scoring for test papers.
 This script loads papers from data/test_papers/papers.json and runs scoring.
 """
 import argparse
-from datetime import datetime
 import json
 import os
 import sys
+from datetime import datetime
 from typing import Dict, List
 
 from dotenv import load_dotenv
