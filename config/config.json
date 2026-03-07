@@ -24,7 +24,12 @@
     "temperature": 0.2,
     "max_output_tokens": 8192,
     "summary_length": "medium",
-    "batch_size": 16
+    "batch_size": 16,
+    "pdf_provider": "gemini",
+    "pdf_model": "gemini-2.5-flash-lite",
+    "scoring_provider": "openai",
+    "scoring_model": "deepseek-chat",
+    "scoring_base_url": "https://api.deepseek.com"
   },
   "ranking": {
     "min_combined_score": 4,

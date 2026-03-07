@@ -28,6 +28,7 @@ jobs:
       id: generate_report
       env:
         GOOGLE_API_KEY: ${{ secrets.GOOGLE_API_KEY }}
+        OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
         EMAIL_SMTP_SERVER: ${{ secrets.EMAIL_SMTP_SERVER }}
         EMAIL_SMTP_PORT: ${{ secrets.EMAIL_SMTP_PORT }}
         EMAIL_SENDER: ${{ secrets.EMAIL_SENDER }}
