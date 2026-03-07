@@ -15,7 +15,7 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from src.arxiv.client import ArxivClient
 from src.arxiv.parser import ArxivParser
-from src.llm.factory import create_llm_client
+from src.llm.factory import create_llm_client, create_scoring_client, create_pdf_client
 from src.output.markdown import MarkdownReportGenerator
 from src.output.email import EmailNotifier
 from src.utils.citation import CitationAnalyzer
@@ -59,6 +59,12 @@ def main():
     # Create LLM client using factory (auto-detects provider from config path)
     llm_client, provider_name = create_llm_client(config_path=args.config, provider=args.provider)
     print(f"Using LLM provider: {provider_name}")
+
+    # Create separate clients for scoring and PDF analysis
+    scoring_client = create_scoring_client(config_path=args.config)
+    pdf_client = create_pdf_client(config_path=args.config)
+    print(f"Using scoring provider: {scoring_client.__class__.__name__}")
+    print(f"Using PDF provider: {pdf_client.__class__.__name__}")
     
     markdown_generator = MarkdownReportGenerator(config_path=args.config)
     email_notifier = EmailNotifier(config_path=args.config)
@@ -79,8 +85,8 @@ def main():
     
     # 4. Score papers using LLM for relevance and significance
     print("Scoring papers for relevance and significance using LLM...")
-    scored_papers = llm_client.batch_score_papers(
-        recent_papers, 
+    scored_papers = scoring_client.batch_score_papers(
+        recent_papers,
         keywords=keywords,
         negative_keywords=exclude_keywords
     )
@@ -95,24 +101,24 @@ def main():
     print("Analyzing papers with LLM...")
     for i, paper in enumerate(selected_papers):
         print(f"Analyzing paper {i+1}/{len(selected_papers)}: {paper['title']}")
-        
+
         # Enrich paper data
         paper = arxiv_parser.enrich_paper_data(paper)
-        
+
         # Try to get the full PDF for better analysis
         pdf_data = arxiv_client.get_pdf_content(paper['pdf_url'])
-        
+
         if pdf_data:
-            # Analyze using the full PDF
-            paper['analysis'] = llm_client.analyze_paper_from_pdf(pdf_data, paper)
+            # Analyze using the full PDF with multimodal client
+            paper['analysis'] = pdf_client.analyze_paper_from_pdf(pdf_data, paper)
         else:
             # Fall back to abstract-based analysis if PDF is too large (>20MB) or download fails
             print(f"Falling back to abstract-based analysis for {paper['title']}")
-            paper['analysis'] = llm_client.analyze_paper_from_abstract(paper)
+            paper['analysis'] = pdf_client.analyze_paper_from_abstract(paper)
     
     # 7. Generate report summary
     print("Generating report summary...")
-    report_summary = llm_client.generate_report_summary(selected_papers, report_type="daily")
+    report_summary = scoring_client.generate_report_summary(selected_papers, report_type="daily")
     
     # 8. Generate Markdown report
     print("Generating Markdown report...")

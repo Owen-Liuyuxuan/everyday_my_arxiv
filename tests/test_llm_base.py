@@ -24,7 +24,7 @@ class MockLLMClient(BaseLLMClient):
     def translate_content(self, content, target_language):
         return f"Mock translation to {target_language}"
     
-    def _score_single_paper(self, paper, keywords, negative_keywords=None):
+    def _score_single_paper(self, paper, keywords, negative_keywords=None, author_preferences=None):
         return {
             "relevance_score": 2,
             "significance_score": 2,

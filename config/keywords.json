@@ -8,7 +8,12 @@
     "3D Gaussian",
     "autonomous driving",
     "foundation model",
-    "Diffusion"
+    "Diffusion",
+    "embodied AI",
+    "embodied intelligence",
+    "humanoid robot",
+    "end-to-end driving",
+    "motion planning"
   ],
   "secondary_keywords": [
     "convolutional",
@@ -17,7 +22,6 @@
     "CLIP",
     "vision transformer",
     "ViT",
-    "foundation model",
     "multimodal",
     "3D reconstruction",
     "point cloud",
@@ -31,7 +35,10 @@
     "LiDAR",
     "camera",
     "survey",
-    "benchmark"
+    "benchmark",
+    "robot learning",
+    "scene understanding",
+    "vehicle dynamics"
   ],
   "exclude_keywords": [
     "medical",
@@ -45,9 +52,66 @@
     "fashion",
     "social",
     "AI safety",
-    "emotion"
+    "emotion",
+    "simulation-only"
   ],
-  "author_preferences": [],
+  "author_preferences": {
+    "us_industry": [
+      "Tesla FSD",
+      "Full Self-Driving",
+      "Waymo",
+      "Cruise",
+      "Nvidia DRIVE",
+      "Mobileye",
+      "Boston Dynamics",
+      "Figure AI",
+      "Sanctuary AI",
+      "DeepMind",
+      "Meta AI",
+      "Reality Labs",
+      "OpenAI",
+      "Amazon Robotics"
+    ],
+    "us_academia": [
+      "CMU",
+      "Carnegie Mellon",
+      "Stanford",
+      "MIT",
+      "CSAIL",
+      "Berkeley",
+      "Georgia Tech",
+      "UT Austin"
+    ],
+    "china_industry": [
+      "Baidu Apollo",
+      "Huawei",
+      "Noah's Ark",
+      "Tencent",
+      "Alibaba",
+      "DAMO Academy",
+      "ByteDance",
+      "XPeng",
+      "Li Auto",
+      "AutoX",
+      "Pony.ai",
+      "Momenta",
+      "Horizon Robotics",
+      "DeepBlue Technology",
+      "Ubtech",
+      "Unitree"
+    ],
+    "china_academia": [
+      "Tsinghua",
+      "Peking University",
+      "Zhejiang University",
+      "Shanghai Jiao Tong",
+      "Chinese Academy of Sciences",
+      "CASIA",
+      "HKU",
+      "CUHK",
+      "HKUST"
+    ]
+  },
   "weight_factors": {
     "title_match": 2.0,
     "abstract_match": 1.0,
