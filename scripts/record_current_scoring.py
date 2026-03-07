@@ -2,21 +2,24 @@
 Script to record the current scoring for test papers.
 This script loads papers from data/test_papers/papers.json and runs scoring.
 """
+import argparse
+from datetime import datetime
 import json
 import os
 import sys
-from datetime import datetime
 from typing import Dict, List
 
 from dotenv import load_dotenv
 
-# Add src to path for imports
+# Add src to path for imports (must be before src.* imports)
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
+
+from src.llm.factory import create_scoring_client
 
 # Load environment variables from .env file
 load_dotenv()
 
-from src.llm.gemini import GeminiClient
+
 
 
 def load_papers(papers_file: str = "data/test_papers/papers.json") -> List[Dict]:
@@ -43,7 +46,8 @@ def load_keywords(keywords_file: str = "config/keywords.json") -> Dict:
 def record_scoring(
     papers_file: str = "data/test_papers/papers.json",
     keywords_file: str = "config/keywords.json",
-    output_file: str = "data/test_papers/scoring_results.json"
+    output_file: str = "data/test_papers/scoring_results.json",
+    config_path: str = "config/config.json"
 ) -> List[Dict]:
     """
     Record current scoring for test papers.
@@ -52,6 +56,7 @@ def record_scoring(
         papers_file: Path to papers JSON file
         keywords_file: Path to keywords JSON file
         output_file: Path to save scoring results
+        config_path: Path to config file for LLM provider selection
 
     Returns:
         List of papers with scoring results
@@ -67,8 +72,9 @@ def record_scoring(
     print(f"Primary keywords: {len(primary_keywords)}")
     print(f"Exclude keywords: {len(exclude_keywords)}")
 
-    print("\nInitializing Gemini client for scoring...")
-    client = GeminiClient()
+    print("\nInitializing scoring client from config...")
+    client = create_scoring_client(config_path=config_path)
+    print(f"Using scoring provider: {client.__class__.__name__}")
 
     print(f"\nScoring {len(papers)} papers...")
     scored_papers = client.batch_score_papers(papers, primary_keywords, exclude_keywords)
@@ -109,5 +115,21 @@ def record_scoring(
 
 
 if __name__ == "__main__":
-    results = record_scoring()
+    parser = argparse.ArgumentParser(description="Record scoring for test papers")
+    parser.add_argument("--config", default="config/config.json",
+                        help="Path to config file for LLM provider")
+    parser.add_argument("--papers", default="data/test_papers/papers.json",
+                        help="Path to papers JSON file")
+    parser.add_argument("--keywords", default="config/keywords.json",
+                        help="Path to keywords JSON file")
+    parser.add_argument("--output", default="data/test_papers/scoring_results.json",
+                        help="Path to output file")
+    args = parser.parse_args()
+
+    results = record_scoring(
+        papers_file=args.papers,
+        keywords_file=args.keywords,
+        output_file=args.output,
+        config_path=args.config
+    )
     print(f"\nDone! Scored {len(results)} papers.")
