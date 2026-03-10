@@ -21,13 +21,13 @@
   },
   "llm": {
     "provider": "gemini",
-    "model": "gemini-2.5-flash",
+    "model": "gemini-3.1-flash-lite-preview",
     "temperature": 0.2,
     "max_output_tokens": 8192,
     "summary_length": "medium",
     "batch_size": 16,
     "pdf_provider": "gemini",
-    "pdf_model": "gemini-2.5-flash-lite",
+    "pdf_model": "gemini-3.1-flash-lite-preview",
     "scoring_provider": "openai",
     "scoring_model": "deepseek-chat",
     "scoring_base_url": "https://api.deepseek.com"
