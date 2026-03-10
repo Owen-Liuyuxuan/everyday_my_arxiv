@@ -22,7 +22,7 @@
   "llm": {
     "provider": "gemini",
     "model": "gemini-3.1-flash-lite-preview",
-    "temperature": 0.2,
+    "temperature": 1.0,
     "max_output_tokens": 8192,
     "summary_length": "medium",
     "batch_size": 16,
