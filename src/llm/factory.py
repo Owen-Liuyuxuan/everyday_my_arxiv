@@ -217,8 +217,8 @@ def create_pdf_client(config_path: str = "config/config.json") -> "BaseLLMClient
     if pdf_provider:
         if pdf_provider.lower() == "openai":
             raise ValueError(
-                "PDF analysis is not supported by OpenAI-compatible client. "
-                "Use 'gemini' or 'ark' for pdf_provider."
+                "PDF analysis is not supported by the generic OpenAI SDK client. "
+                "Use 'gemini', 'ark', or 'openrouter' for pdf_provider."
             )
 
         # Create a temporary config with PDF-specific settings

@@ -192,12 +192,11 @@ class TestFactoryWithMockedEnvironment:
 
         try:
             client, provider = create_llm_client(temp_openrouter_config, provider="openrouter")
-            assert provider == "openrouter"
-            assert client is not None
         except ImportError:
             pytest.skip("requests not installed")
-        except Exception:
-            pass
+        else:
+            assert provider == "openrouter"
+            assert client is not None
 
     def test_missing_openrouter_api_key(self, temp_openrouter_config, monkeypatch):
         """Missing OpenRouter keys raises ValueError."""

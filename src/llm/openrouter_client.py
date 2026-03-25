@@ -1,8 +1,10 @@
 """
 OpenRouter API client using direct HTTP (requests), matching the chat/completions JSON API.
 
-No OpenAI SDK: same pattern as a raw POST to
+Uses requests only (no OpenAI SDK). POST to e.g.
 https://openrouter.ai/api/v1/chat/completions with Bearer auth and JSON body.
+
+Inherits BaseLLMClient only so importing this module does not load the OpenAI package.
 """
 import base64
 import json
@@ -12,13 +14,12 @@ from typing import Any, Dict, List, Optional
 import requests
 
 from src.llm.base import BaseLLMClient
-from src.llm.openai_client import OpenAIClient
 
 
 DEFAULT_OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1"
 
 
-class OpenRouterClient(OpenAIClient):
+class OpenRouterClient(BaseLLMClient):
     """
     LLM client for OpenRouter via HTTP POST (see try_openrouter.py).
 
@@ -37,7 +38,7 @@ class OpenRouterClient(OpenAIClient):
     """
 
     def __init__(self, config_path: str = "config/config.json"):
-        BaseLLMClient.__init__(self, config_path)
+        super().__init__(config_path)
 
         self._api_key = (
             os.environ.get("OPENROUTER_API_KEY")
@@ -131,6 +132,20 @@ class OpenRouterClient(OpenAIClient):
             payload["max_tokens"] = self.max_output_tokens
         return self._post_chat_completions(payload)
 
+    def _format_pdf_prompt(self, prompt_template: str, paper_metadata: Dict) -> str:
+        """Fill template placeholders like Ark PDF flow (title, authors, abstract, length)."""
+        authors = paper_metadata.get("authors") or []
+        if isinstance(authors, str):
+            authors_str = authors
+        else:
+            authors_str = ", ".join(authors)
+        return prompt_template.format(
+            title=paper_metadata.get("title", ""),
+            authors=authors_str,
+            abstract=paper_metadata.get("abstract", ""),
+            summary_length=self.summary_length,
+        )
+
     def _openrouter_pdf_plugins(self) -> Optional[List[Dict[str, Any]]]:
         raw = self.config.get("openrouter_pdf_plugins")
         if raw is not None:
@@ -150,7 +165,7 @@ class OpenRouterClient(OpenAIClient):
         prompt_type: str = "summary",
     ) -> str:
         prompt_template = self._load_prompt_template(prompt_type)
-        prompt = prompt_template
+        prompt = self._format_pdf_prompt(prompt_template, paper_metadata)
 
         b64 = base64.standard_b64encode(pdf_data).decode("ascii")
         data_url = f"data:application/pdf;base64,{b64}"
@@ -191,3 +206,70 @@ class OpenRouterClient(OpenAIClient):
             payload["plugins"] = plugins
 
         return self._post_chat_completions(payload)
+
+    def analyze_paper_from_abstract(
+        self, paper: Dict, prompt_type: str = "abstract_analysis"
+    ) -> str:
+        prompt_template = self._load_prompt_template(prompt_type)
+        prompt = prompt_template.format(
+            title=paper["title"],
+            authors=", ".join(paper["authors"]),
+            abstract=paper["abstract"],
+            categories=", ".join(paper["categories"]),
+            published_date=paper["published_date"],
+        )
+        return self._call_api(prompt)
+
+    def generate_report_summary(self, papers: List[Dict], report_type: str = "daily") -> str:
+        prompt_template = self._load_prompt_template("report_summary")
+        paper_info = []
+        for i, paper in enumerate(papers, 1):
+            paper_info.append(f"{i}. \"{paper['title']}\" by {paper['formatted_authors']}")
+        paper_list = "\n".join(paper_info)
+        prompt = prompt_template.format(
+            report_type=report_type,
+            paper_count=len(papers),
+            paper_list=paper_list,
+            date=papers[0]["published_date"] if papers else "today",
+        )
+        return self._call_api(prompt)
+
+    def translate_content(self, content: str, target_language: str) -> str:
+        prompt_template = self._load_prompt_template("translate")
+        prompt = prompt_template.format(
+            content=content,
+            target_language=target_language,
+        )
+        return self._call_api(prompt, temperature=0.1)
+
+    def _format_author_preferences(self, author_preferences: Optional[Dict]) -> str:
+        if not author_preferences:
+            return "No specific author preferences"
+        formatted = []
+        for category, values in author_preferences.items():
+            if values:
+                formatted.append(f"{category}: {', '.join(values)}")
+        return "; ".join(formatted) if formatted else "No specific author preferences"
+
+    def _score_single_paper(
+        self,
+        paper: Dict,
+        keywords: List[str],
+        negative_keywords: Optional[List[str]] = None,
+        author_preferences: Optional[Dict] = None,
+    ) -> Dict:
+        prompt_template = self._load_prompt_template("relevance_scoring")
+        prompt = prompt_template.format(
+            title=paper["title"],
+            authors=", ".join(paper["authors"]),
+            abstract=paper["abstract"],
+            categories=", ".join(paper.get("categories", [])),
+            published_date=paper.get("published_date", "N/A"),
+            venue=paper.get("venue", "N/A"),
+            code_url=paper.get("code_url", "N/A"),
+            keywords=", ".join(keywords),
+            negative_keywords=", ".join(negative_keywords or []),
+            author_preferences=self._format_author_preferences(author_preferences),
+        )
+        response_text = self._call_api(prompt, temperature=0.05, max_tokens=1024)
+        return self._parse_json_response(response_text)
