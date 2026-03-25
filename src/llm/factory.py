@@ -27,13 +27,13 @@ def create_llm_client(config_path: str = "config/config.json",
 
     Args:
         config_path: Path to the configuration JSON file
-        provider: Explicit provider name ('gemini', 'ark', or 'openai').
+        provider: Explicit provider name ('gemini', 'ark', 'openai', or 'openrouter').
                   If None, auto-detects from config_path.
 
     Returns:
         A tuple of (client_instance, provider_name) where:
         - client_instance: An instance of BaseLLMClient
-        - provider_name: The actual provider being used (e.g., 'gemini', 'ark', 'openai')
+        - provider_name: The actual provider being used (e.g., 'gemini', 'ark', 'openai', 'openrouter')
 
     Raises:
         ValueError: If provider is unknown
@@ -54,6 +54,8 @@ def create_llm_client(config_path: str = "config/config.json",
             provider = "ark"
         elif "gemini" in config_path.lower():
             provider = "gemini"
+        elif "openrouter" in config_path.lower():
+            provider = "openrouter"
         elif "openai" in config_path.lower():
             provider = "openai"
         else:
@@ -92,10 +94,20 @@ def create_llm_client(config_path: str = "config/config.json",
                 "Install with: pip install openai"
             ) from e
 
+    elif provider == "openrouter":
+        try:
+            from src.llm.openrouter_client import OpenRouterClient
+            return OpenRouterClient(config_path), "openrouter"
+        except ImportError as e:
+            raise ImportError(
+                "requests is required for OpenRouter. "
+                "Install with: pip install requests"
+            ) from e
+
     else:
         raise ValueError(
             f"Unknown LLM provider: {provider}. "
-            f"Supported providers: 'gemini', 'ark', 'openai'"
+            f"Supported providers: 'gemini', 'ark', 'openai', 'openrouter'"
         )
 
 
@@ -104,7 +116,7 @@ def create_scoring_client(config_path: str = "config/config.json") -> "BaseLLMCl
     Create a client for text-only scoring operations.
 
     Reads from config to determine which provider to use for scoring:
-    - config['llm']['scoring_provider']: Provider to use (gemini, ark, openai)
+    - config['llm']['scoring_provider']: Provider to use (gemini, ark, openai, openrouter)
     - config['llm']['scoring_model']: Model name for the provider
     - config['llm']['scoring_base_url']: Base URL for OpenAI-compatible endpoints
 
@@ -167,10 +179,11 @@ def create_pdf_client(config_path: str = "config/config.json") -> "BaseLLMClient
     Create a client for multimodal PDF analysis.
 
     Reads from config to determine which provider to use for PDF analysis:
-    - config['llm']['pdf_provider']: Provider to use (gemini, ark)
+    - config['llm']['pdf_provider']: Provider to use (gemini, ark, openrouter)
     - config['llm']['pdf_model']: Model name for the provider
 
-    Only Gemini and Ark support PDF analysis (multimodal).
+    Gemini, Ark, and OpenRouter support PDF analysis (multimodal). Generic OpenAI-compatible
+    text-only clients do not.
 
     If pdf_provider is not specified, falls back to the main provider.
 
@@ -181,7 +194,7 @@ def create_pdf_client(config_path: str = "config/config.json") -> "BaseLLMClient
         An instance of BaseLLMClient configured for PDF analysis
 
     Raises:
-        ValueError: If pdf_provider is set to 'openai' (not supported)
+        ValueError: If pdf_provider is set to 'openai' (text-only; not supported for PDF)
 
     Example config:
         {
@@ -256,6 +269,12 @@ def get_available_providers() -> list:
     try:
         from openai import OpenAI  # noqa: F401
         available.append("openai")
+    except ImportError:
+        pass
+
+    try:
+        import requests  # noqa: F401
+        available.append("openrouter")
     except ImportError:
         pass
     
