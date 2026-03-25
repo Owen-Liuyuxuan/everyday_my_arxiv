@@ -52,6 +52,26 @@ def temp_ark_config():
     os.unlink(temp_path)
 
 
+@pytest.fixture
+def temp_openrouter_config():
+    """Create a temporary OpenRouter-oriented config file."""
+    config = {
+        "llm": {
+            "model": "openai/gpt-4o-mini",
+            "temperature": 0.2,
+            "max_output_tokens": 4096,
+            "summary_length": "medium",
+            "batch_size": 16,
+        }
+    }
+    with tempfile.NamedTemporaryFile(mode='w', suffix='_openrouter.json', delete=False) as f:
+        json.dump(config, f)
+        temp_path = f.name
+
+    yield temp_path
+    os.unlink(temp_path)
+
+
 class TestFactoryProviderDetection:
     """Tests for provider auto-detection from config path."""
     
@@ -91,6 +111,14 @@ class TestFactoryProviderDetection:
                 create_llm_client(temp_gemini_config, provider="ark")
         except ImportError:
             pytest.skip("Volcengine SDK not installed")
+
+    def test_detect_openrouter_from_path(self, temp_openrouter_config, monkeypatch):
+        """Filename containing 'openrouter' maps to OpenRouter (not 'openai' substring)."""
+        monkeypatch.delenv("OPENROUTER_API_KEY", raising=False)
+        monkeypatch.delenv("OPEN_ROUTE", raising=False)
+
+        with pytest.raises(ValueError, match="OPENROUTER_API_KEY|OPEN_ROUTE|openrouter_api_key"):
+            create_llm_client(temp_openrouter_config)
 
 
 class TestFactoryWithMockedEnvironment:
@@ -144,13 +172,50 @@ class TestFactoryWithMockedEnvironment:
         except ImportError:
             pytest.skip("Volcengine SDK not installed")
 
+    def test_openrouter_client_creation_with_api_key(self, temp_openrouter_config, monkeypatch):
+        """Test creating OpenRouter client when OPENROUTER_API_KEY is set."""
+        monkeypatch.setenv("OPENROUTER_API_KEY", "test-api-key")
+
+        try:
+            client, provider = create_llm_client(temp_openrouter_config, provider="openrouter")
+            assert client is not None
+            assert provider == "openrouter"
+        except ImportError:
+            pytest.skip("requests not installed")
+        except Exception as e:
+            assert "Set OPENROUTER_API_KEY" not in str(e)
+
+    def test_openrouter_accepts_open_route_env(self, temp_openrouter_config, monkeypatch):
+        """OPEN_ROUTE env is accepted for API key (script compatibility)."""
+        monkeypatch.delenv("OPENROUTER_API_KEY", raising=False)
+        monkeypatch.setenv("OPEN_ROUTE", "test-route-key")
+
+        try:
+            client, provider = create_llm_client(temp_openrouter_config, provider="openrouter")
+        except ImportError:
+            pytest.skip("requests not installed")
+        else:
+            assert provider == "openrouter"
+            assert client is not None
+
+    def test_missing_openrouter_api_key(self, temp_openrouter_config, monkeypatch):
+        """Missing OpenRouter keys raises ValueError."""
+        monkeypatch.delenv("OPENROUTER_API_KEY", raising=False)
+        monkeypatch.delenv("OPEN_ROUTE", raising=False)
+
+        try:
+            with pytest.raises(ValueError, match="OPENROUTER_API_KEY|OPEN_ROUTE"):
+                create_llm_client(temp_openrouter_config, provider="openrouter")
+        except ImportError:
+            pytest.skip("requests not installed")
+
 
 class TestFactoryUnknownProvider:
     """Tests for unknown provider handling."""
     
     def test_unknown_provider_raises_error(self):
-        """Test that unknown provider raises ValueError."""
-        with pytest.raises(ValueError, match="Unknown LLM provider"):
+        """Test that unknown provider raises ValueError and lists supported names."""
+        with pytest.raises(ValueError, match="Unknown LLM provider.*openrouter"):
             create_llm_client("config/config.json", provider="unknown_provider")
 
 
@@ -166,10 +231,9 @@ class TestAvailableProviders:
         
         # Gemini should be available (google-genai is a core dependency)
         assert "gemini" in providers
-        
-        # Ark may or may not be available depending on optional dep installation
-        # Just verify the function doesn't crash
-        assert all(p in ["gemini", "ark"] for p in providers)
+
+        known = {"gemini", "ark", "openai", "openrouter"}
+        assert all(p in known for p in providers)
 
 
 class TestProviderNameReturn:
