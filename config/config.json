@@ -29,7 +29,7 @@
     "pdf_provider": "gemini",
     "pdf_model": "gemini-3.1-flash-lite",
     "scoring_provider": "openai",
-    "scoring_model": "deepseek-chat",
+    "scoring_model": "deepseek-v4-flash",
     "scoring_base_url": "https://api.deepseek.com"
   },
   "ranking": {
