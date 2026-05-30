@@ -1,7 +1,7 @@
 {
   "arxiv": {
     "categories": ["cs.CV", "cs.RO"],
-    "max_results": 200,
+    "max_results": 100,
     "recent_days": 3,
     "adaptive_recent_days": true,
     "citation_lookback_days": 60,
