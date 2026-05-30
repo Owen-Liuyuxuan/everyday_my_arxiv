@@ -26,8 +26,8 @@
     "max_output_tokens": 8192,
     "summary_length": "medium",
     "batch_size": 16,
-    "pdf_provider": "gemini",
-    "pdf_model": "gemini-3.1-flash-lite",
+    "pdf_provider": "openrouter",
+    "pdf_model": "xiaomi/mimo-v2.5",
     "scoring_provider": "openai",
     "scoring_model": "deepseek-v4-flash",
     "scoring_base_url": "https://api.deepseek.com"
