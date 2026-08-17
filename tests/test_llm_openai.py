@@ -34,6 +34,48 @@ def test_missing_api_key_is_rejected(openai_config, monkeypatch):
         OpenAIClient(str(openai_config))
 
 
+def test_text_call_maps_default_limit_to_max_completion_tokens(
+    openai_config, monkeypatch
+):
+    monkeypatch.setenv("OPENAI_API_KEY", "test-key")
+    sdk_client = MagicMock()
+    sdk_client.chat.completions.create.return_value = SimpleNamespace(
+        choices=[SimpleNamespace(message=SimpleNamespace(content="text result"))]
+    )
+
+    with patch("openai.OpenAI", return_value=sdk_client):
+        client = OpenAIClient(str(openai_config))
+        result = client._call_api("Summarize these papers")
+
+    assert result == "text result"
+    sdk_client.chat.completions.create.assert_called_once_with(
+        model="gpt-test",
+        messages=[{"role": "user", "content": "Summarize these papers"}],
+        temperature=0.2,
+        max_completion_tokens=321,
+    )
+
+
+def test_text_call_maps_override_to_max_completion_tokens(openai_config, monkeypatch):
+    monkeypatch.setenv("OPENAI_API_KEY", "test-key")
+    sdk_client = MagicMock()
+    sdk_client.chat.completions.create.return_value = SimpleNamespace(
+        choices=[SimpleNamespace(message=SimpleNamespace(content="score result"))]
+    )
+
+    with patch("openai.OpenAI", return_value=sdk_client):
+        client = OpenAIClient(str(openai_config))
+        result = client._call_api("Score this paper", temperature=0.05, max_tokens=1024)
+
+    assert result == "score result"
+    sdk_client.chat.completions.create.assert_called_once_with(
+        model="gpt-test",
+        messages=[{"role": "user", "content": "Score this paper"}],
+        temperature=0.05,
+        max_completion_tokens=1024,
+    )
+
+
 def test_pdf_uses_files_and_responses_apis(openai_config, monkeypatch):
     monkeypatch.setenv("OPENAI_API_KEY", "test-key")
     sdk_client = MagicMock()

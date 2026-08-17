@@ -108,9 +108,9 @@ class OpenAIClient(BaseLLMClient):
             kwargs["temperature"] = self.temperature
         
         if max_tokens is not None:
-            kwargs["max_tokens"] = max_tokens
+            kwargs["max_completion_tokens"] = max_tokens
         elif self.max_output_tokens:
-            kwargs["max_tokens"] = self.max_output_tokens
+            kwargs["max_completion_tokens"] = self.max_output_tokens
         
         completion = self.client.chat.completions.create(**kwargs)
         return completion.choices[0].message.content
