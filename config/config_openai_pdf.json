@@ -14,7 +14,7 @@
     "output_directory": "reports"
   },
   "email": {
-    "enabled": true,
+    "enabled": false,
     "subject_prefix": "[Arxiv CV Report]",
     "include_full_report": true,
     "include_summary": true
@@ -22,8 +22,8 @@
   "llm": {
     "provider": "openai",
     "model": "gpt-5.6-luna",
-    "temperature": 1.0,
-    "max_output_tokens": 8192,
+    "temperature": 0.2,
+    "max_output_tokens": 1024,
     "summary_length": "medium",
     "batch_size": 16,
     "pdf_provider": "openai",

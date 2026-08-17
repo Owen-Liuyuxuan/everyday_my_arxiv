@@ -1,0 +1,7 @@
+Read this PDF and return exactly three concise bullet points:
+
+- the document title
+- the main topic
+- one concrete fact stated in the document
+
+Do not use outside knowledge. If any requested item is absent, write "not found in PDF".

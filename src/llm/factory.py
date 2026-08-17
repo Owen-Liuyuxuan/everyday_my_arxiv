@@ -179,11 +179,12 @@ def create_pdf_client(config_path: str = "config/config.json") -> "BaseLLMClient
     Create a client for multimodal PDF analysis.
 
     Reads from config to determine which provider to use for PDF analysis:
-    - config['llm']['pdf_provider']: Provider to use (gemini, ark, openrouter)
+    - config['llm']['pdf_provider']: Provider to use (gemini, ark, openai, openrouter)
     - config['llm']['pdf_model']: Model name for the provider
 
-    Gemini, Ark, and OpenRouter support PDF analysis (multimodal). Generic OpenAI-compatible
-    text-only clients do not.
+    Gemini, Ark, OpenAI, and OpenRouter support PDF analysis. OpenAI uses the
+    official Files and Responses APIs; a third-party OpenAI-compatible endpoint
+    must implement both APIs for that path to work.
 
     If pdf_provider is not specified, falls back to the main provider.
 
@@ -193,14 +194,11 @@ def create_pdf_client(config_path: str = "config/config.json") -> "BaseLLMClient
     Returns:
         An instance of BaseLLMClient configured for PDF analysis
 
-    Raises:
-        ValueError: If pdf_provider is set to 'openai' (text-only; not supported for PDF)
-
     Example config:
         {
             "llm": {
-                "pdf_provider": "gemini",
-                "pdf_model": "gemini-2.5-flash-lite"
+                "pdf_provider": "openai",
+                "pdf_model": "gpt-5.6-luna"
             }
         }
     """
@@ -215,12 +213,6 @@ def create_pdf_client(config_path: str = "config/config.json") -> "BaseLLMClient
     pdf_provider = llm_config.get('pdf_provider')
 
     if pdf_provider:
-        if pdf_provider.lower() == "openai":
-            raise ValueError(
-                "PDF analysis is not supported by the generic OpenAI SDK client. "
-                "Use 'gemini', 'ark', or 'openrouter' for pdf_provider."
-            )
-
         # Create a temporary config with PDF-specific settings
         pdf_config = {**llm_config}
 
@@ -279,4 +271,3 @@ def get_available_providers() -> list:
         pass
     
     return available
-

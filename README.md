@@ -16,7 +16,7 @@ An automated system that generates daily reports on the latest Computer Vision a
 
 - Daily monitoring of new Arxiv papers in Computer Vision and Pattern Recognition
 - Keyword-based filtering to match your research interests
-- **Multi-provider AI support**: Google Gemini or Volcengine Ark (ByteDance Doubao)
+- **Multi-provider AI support**: Google Gemini, OpenAI, or Volcengine Ark (ByteDance Doubao)
 - AI-powered summarization and analysis
 - Automated report generation in Markdown/HTML format
 - Email notifications with daily findings
@@ -112,7 +112,7 @@ pip install 'volcengine-python-sdk[ark]'
 
 1. Configure your keywords in `config/keywords.json`
 2. Choose your LLM provider:
-   - **Gemini**: Use `config/config.json` (default)
+   - **OpenAI**: Use `config/config.json` (default)
    - **Ark**: Use `config/config_ark.json`
 
 ### Environment Variables
@@ -127,6 +127,14 @@ export GOOGLE_API_KEY="your-google-api-key"
 export ARK_API_KEY="your-ark-api-key"
 ```
 
+#### For OpenAI
+```bash
+export OPENAI_API_KEY="your-openai-api-key"
+```
+
+Keep API keys in environment variables or the ignored `.env` file; do not add
+them to JSON configuration files.
+
 #### For Email (optional)
 ```bash
 export EMAIL_SMTP_SERVER="smtp-mail.outlook.com"
@@ -139,7 +147,7 @@ export EMAIL_RECIPIENT="recipient@example.com"
 ### Running
 
 ```bash
-# With Gemini (default)
+# With OpenAI GPT-5.6 Luna for scoring and PDF analysis (default)
 uv run scripts/run_daily_report.py
 
 # With Ark
@@ -150,20 +158,35 @@ uv run scripts/run_daily_report.py --config config/config.json --provider ark
 
 # Local testing with fewer papers
 uv run scripts/test_local.py --papers 3 --no-email
+
+# OpenAI PDF smoke test with the included local fixture
+uv run scripts/test_openai_pdf.py
+
+# Or test one of your own local PDFs
+uv run scripts/test_openai_pdf.py /absolute/path/to/paper.pdf
 ```
+
+The OpenAI PDF example uses `config/config_openai_pdf.json`, uploads the PDF with
+the Files API (`purpose="user_data"`), sends its file ID through the Responses
+API, and deletes the uploaded file after the response by default. Set
+`llm.pdf_detail` to `low`, `high`, or `auto` to trade visual detail for input
+token usage.
 
 ## LLM Provider Configuration
 
-### Google Gemini (`config/config.json`)
+### OpenAI (`config/config.json`)
 
 ```json
 {
   "llm": {
-    "model": "gemini-2.5-flash",
-    "temperature": 0.2,
-    "max_output_tokens": 4096,
-    "summary_length": "medium",
-    "batch_size": 16
+    "provider": "openai",
+    "model": "gpt-5.6-luna",
+    "pdf_provider": "openai",
+    "pdf_model": "gpt-5.6-luna",
+    "pdf_detail": "auto",
+    "delete_uploaded_files": true,
+    "scoring_provider": "openai",
+    "scoring_model": "gpt-5.6-luna"
   }
 }
 ```
@@ -200,7 +223,8 @@ Papers are automatically filtered based on minimum combined score thresholds tha
 To enable GitHub Actions:
 
 1. Add your LLM API key as a GitHub secret:
-   - `GOOGLE_API_KEY` for Gemini
+   - `OPENAI_API_KEY` for the default OpenAI configuration
+   - `GOOGLE_API_KEY` for Gemini (if using)
    - `ARK_API_KEY` for Ark (if using)
 2. Add your email credentials as GitHub secrets
 3. The workflow will run daily and send reports to your email
