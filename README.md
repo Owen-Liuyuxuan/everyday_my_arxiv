@@ -162,6 +162,9 @@ uv run scripts/test_local.py --papers 3 --no-email
 # OpenAI PDF smoke test with the included local fixture
 uv run scripts/test_openai_pdf.py
 
+# End-to-end OpenAI smoke test matching the daily LLM call sequence
+uv run scripts/test_openai_daily_flow.py
+
 # Or test one of your own local PDFs
 uv run scripts/test_openai_pdf.py /absolute/path/to/paper.pdf
 ```

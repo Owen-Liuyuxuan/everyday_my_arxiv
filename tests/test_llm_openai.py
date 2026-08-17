@@ -34,7 +34,7 @@ def test_missing_api_key_is_rejected(openai_config, monkeypatch):
         OpenAIClient(str(openai_config))
 
 
-def test_text_call_maps_default_limit_to_max_completion_tokens(
+def test_gpt_text_call_uses_default_temperature_and_max_completion_tokens(
     openai_config, monkeypatch
 ):
     monkeypatch.setenv("OPENAI_API_KEY", "test-key")
@@ -51,12 +51,12 @@ def test_text_call_maps_default_limit_to_max_completion_tokens(
     sdk_client.chat.completions.create.assert_called_once_with(
         model="gpt-test",
         messages=[{"role": "user", "content": "Summarize these papers"}],
-        temperature=0.2,
+        temperature=1,
         max_completion_tokens=321,
     )
 
 
-def test_text_call_maps_override_to_max_completion_tokens(openai_config, monkeypatch):
+def test_gpt_text_call_ignores_custom_temperature(openai_config, monkeypatch):
     monkeypatch.setenv("OPENAI_API_KEY", "test-key")
     sdk_client = MagicMock()
     sdk_client.chat.completions.create.return_value = SimpleNamespace(
@@ -70,6 +70,27 @@ def test_text_call_maps_override_to_max_completion_tokens(openai_config, monkeyp
     assert result == "score result"
     sdk_client.chat.completions.create.assert_called_once_with(
         model="gpt-test",
+        messages=[{"role": "user", "content": "Score this paper"}],
+        temperature=1,
+        max_completion_tokens=1024,
+    )
+
+
+def test_non_gpt_text_call_keeps_custom_temperature(openai_config, monkeypatch):
+    monkeypatch.setenv("OPENAI_API_KEY", "test-key")
+    sdk_client = MagicMock()
+    sdk_client.chat.completions.create.return_value = SimpleNamespace(
+        choices=[SimpleNamespace(message=SimpleNamespace(content="score result"))]
+    )
+
+    with patch("openai.OpenAI", return_value=sdk_client):
+        client = OpenAIClient(str(openai_config))
+        client.model_name = "deepseek-chat"
+        result = client._call_api("Score this paper", temperature=0.05, max_tokens=1024)
+
+    assert result == "score result"
+    sdk_client.chat.completions.create.assert_called_once_with(
+        model="deepseek-chat",
         messages=[{"role": "user", "content": "Score this paper"}],
         temperature=0.05,
         max_completion_tokens=1024,

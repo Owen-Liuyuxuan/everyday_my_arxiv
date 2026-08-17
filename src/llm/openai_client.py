@@ -102,7 +102,11 @@ class OpenAIClient(BaseLLMClient):
             "messages": [{"role": "user", "content": prompt}],
         }
         
-        if temperature is not None:
+        if self.model_name.lower().startswith("gpt-"):
+            # OpenAI GPT reasoning models only accept the default temperature.
+            # Keep custom temperatures for non-GPT OpenAI-compatible models.
+            kwargs["temperature"] = 1
+        elif temperature is not None:
             kwargs["temperature"] = temperature
         elif self.temperature:
             kwargs["temperature"] = self.temperature
