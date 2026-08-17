@@ -1,5 +1,5 @@
 """
-OpenAI-compatible API client for paper analysis and relevance scoring.
+OpenAI API client for paper analysis and relevance scoring.
 
 Supports any OpenAI-compatible API endpoint including:
 - OpenAI models (GPT-4, GPT-4o, etc.)
@@ -7,10 +7,11 @@ Supports any OpenAI-compatible API endpoint including:
 - Local models via Ollama, LM Studio, etc.
 - Other OpenAI-compatible providers (Anthropic via compatible endpoints, etc.)
 
-Note: PDF analysis is NOT supported by this client as it requires multimodal capabilities.
-Use a separate multimodal client (GeminiClient or ArkClient) for PDF analysis.
+Official OpenAI endpoints also support PDF inputs through the Responses API. Other
+OpenAI-compatible providers may not implement the Files or Responses APIs.
 """
 import os
+import re
 from typing import Dict, List, Optional
 
 from src.llm.base import BaseLLMClient
@@ -26,7 +27,8 @@ class OpenAIClient(BaseLLMClient):
     - Report summarization
     - Translation
     
-    PDF analysis is NOT supported - use a separate multimodal client.
+    PDF analysis uses the Files and Responses APIs when the configured endpoint
+    implements those official OpenAI APIs.
     """
     
     def __init__(self, config_path: str = "config/config.json"):
@@ -75,7 +77,12 @@ class OpenAIClient(BaseLLMClient):
         )
         
         # Model configuration
-        self.model_name = self.config.get('model', 'gpt-4o-mini')
+        self.model_name = self.config.get('model', 'gpt-5.6-luna')
+        self.pdf_detail = self.config.get('pdf_detail', 'auto')
+        if self.pdf_detail not in {'auto', 'low', 'high'}:
+            raise ValueError("llm.pdf_detail must be one of: auto, low, high")
+
+        self.delete_uploaded_files = self.config.get('delete_uploaded_files', True)
     
     def _call_api(self, prompt: str, temperature: Optional[float] = None,
                   max_tokens: Optional[int] = None) -> str:
@@ -111,15 +118,13 @@ class OpenAIClient(BaseLLMClient):
     def analyze_paper_from_pdf(self, pdf_data: bytes, paper_metadata: Dict,
                                prompt_type: str = "summary") -> str:
         """
-        Analyze a paper using its PDF content and metadata.
-        
-        NOTE: OpenAI-compatible clients typically don't support PDF analysis.
-        This method will raise a NotImplementedError.
-        
-        Use a separate multimodal client (GeminiClient or ArkClient) for PDF analysis.
+        Analyze a PDF with the OpenAI Files and Responses APIs.
+
+        The uploaded file is deleted after the response by default. Set
+        ``llm.delete_uploaded_files`` to ``false`` to retain it.
         
         Args:
-            pdf_data: PDF content as bytes (ignored)
+            pdf_data: PDF content as bytes
             paper_metadata: Paper metadata (title, authors, etc.)
             prompt_type: Type of analysis to perform
             
@@ -127,13 +132,59 @@ class OpenAIClient(BaseLLMClient):
             Analysis result as text
             
         Raises:
-            NotImplementedError: PDF analysis not supported by OpenAI-compatible client
+            ValueError: If the input is empty, not a PDF, or exceeds the API limit
         """
-        raise NotImplementedError(
-            "PDF analysis is not supported by OpenAI-compatible client. "
-            "Use GeminiClient or ArkClient for PDF analysis, or configure "
-            "separate pdf_provider in your config."
-        )
+        if not pdf_data:
+            raise ValueError("PDF data is empty")
+        if not pdf_data.lstrip().startswith(b"%PDF-"):
+            raise ValueError("Input does not appear to be a PDF (missing %PDF header)")
+
+        # OpenAI's combined per-request file-input limit is 50 MB. Keep the
+        # validation strict because the documentation says each file must be under it.
+        max_pdf_bytes = 50 * 1024 * 1024
+        if len(pdf_data) >= max_pdf_bytes:
+            raise ValueError("PDF must be smaller than 50 MB")
+
+        prompt = self._load_prompt_template(prompt_type)
+        title = str(paper_metadata.get('title', 'paper')).strip() or 'paper'
+        safe_stem = re.sub(r'[^A-Za-z0-9._-]+', '_', title)[:80].strip('._') or 'paper'
+        uploaded_file = None
+
+        try:
+            uploaded_file = self.client.files.create(
+                file=(f"{safe_stem}.pdf", pdf_data, "application/pdf"),
+                purpose="user_data",
+            )
+
+            input_file = {
+                "type": "input_file",
+                "file_id": uploaded_file.id,
+            }
+            # In SDK 2.26.0, omitting detail represents the API's `auto` default.
+            if self.pdf_detail in {'low', 'high'}:
+                input_file["detail"] = self.pdf_detail
+
+            response = self.client.responses.create(
+                model=self.model_name,
+                input=[
+                    {
+                        "role": "user",
+                        "content": [
+                            input_file,
+                            {"type": "input_text", "text": prompt},
+                        ],
+                    }
+                ],
+                max_output_tokens=self.max_output_tokens,
+            )
+            return response.output_text
+        finally:
+            if uploaded_file is not None and self.delete_uploaded_files:
+                try:
+                    self.client.files.delete(uploaded_file.id)
+                except Exception as exc:
+                    # Cleanup failure should not discard a successful analysis.
+                    print(f"Warning: could not delete OpenAI file {uploaded_file.id}: {exc}")
     
     def analyze_paper_from_abstract(self, paper: Dict,
                                     prompt_type: str = "abstract_analysis") -> str:

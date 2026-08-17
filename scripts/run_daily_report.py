@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 Main script to run the daily Arxiv paper report with enhanced paper selection using
-LLM (Gemini or Ark) to determine relevance and significance.
+configurable LLM providers to determine relevance and significance.
 Modified to support granular stage execution and flexible LLM model selection.
 """
 import argparse
@@ -90,15 +90,27 @@ def main():
     paper_ranker = PaperRanker(min_combined_score=config.get('ranking', {}).get('min_combined_score', 4))
 
     # Create separate LLM clients for scoring and PDF analysis
-    # scoring_client: text-only, cheaper models (DeepSeek, etc.)
-    # pdf_client: multimodal, for PDF analysis (Gemini, Ark with vision)
+    # The default config uses OpenAI GPT-5.6 Luna for both scoring and PDF analysis.
+    # Separate clients preserve the option to configure different providers later.
     scoring_client = None
     pdf_client = None
     if args.stage in ["score", "analyze", "report", "all"]:
         scoring_client = create_scoring_client(config_path=args.config)
         pdf_client = create_pdf_client(config_path=args.config)
-        print(f"Using scoring provider: {scoring_client.__class__.__name__}")
-        print(f"Using PDF provider: {pdf_client.__class__.__name__}")
+        scoring_model = getattr(
+            scoring_client, "model_name", getattr(scoring_client, "text_model", "unknown")
+        )
+        pdf_model = getattr(
+            pdf_client, "model_name", getattr(pdf_client, "document_model", "unknown")
+        )
+        print(
+            f"Using scoring provider: {scoring_client.__class__.__name__} "
+            f"(model={scoring_model})"
+        )
+        print(
+            f"Using PDF provider: {pdf_client.__class__.__name__} "
+            f"(model={pdf_model})"
+        )
 
     papers = []
 

@@ -1,0 +1,46 @@
+%PDF-1.4
+%ASCII
+1 0 obj
+<< /Type /Catalog /Pages 2 0 R >>
+endobj
+2 0 obj
+<< /Type /Pages /Kids [3 0 R] /Count 1 >>
+endobj
+3 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 5 0 R >> >> /Contents 4 0 R >>
+endobj
+4 0 obj
+<< /Length 204 >>
+stream
+BT
+/F1 18 Tf
+72 720 Td
+(OpenAI PDF Reading Smoke Test) Tj
+0 -36 Td
+/F1 12 Tf
+(This local PDF tests text and page-image understanding.) Tj
+0 -24 Td
+(The concrete verification code is ROBOTICS-2026.) Tj
+ET
+endstream
+endobj
+5 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>
+endobj
+6 0 obj
+<< /Title (OpenAI PDF Reading Smoke Test) /Author (everyday_my_arxiv) >>
+endobj
+xref
+0 7
+0000000000 65535 f 
+0000000016 00000 n 
+0000000065 00000 n 
+0000000122 00000 n 
+0000000248 00000 n 
+0000000502 00000 n 
+0000000572 00000 n 
+trailer
+<< /Size 7 /Root 1 0 R /Info 6 0 R >>
+startxref
+660
+%%EOF
